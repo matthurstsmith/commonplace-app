@@ -1,4 +1,3 @@
-```javascript
 class CommonplaceAPI {
   constructor(baseURL = 'http://localhost:3001/api') {
     this.baseURL = baseURL;
@@ -70,4 +69,3 @@ class CommonplaceAPI {
 
 // Make it available globally
 window.CommonplaceAPI = CommonplaceAPI;
-```
