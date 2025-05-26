@@ -400,22 +400,35 @@ function findIsochroneIntersections(isochrone1, isochrone2) {
 
 async function analyzeJourneyDetails(coords1, coords2, meetingPoint, meetingTime = null) {
   try {
-    const [journey1, journey2] = await Promise.all([
-      getJourneyDetails(coords1, meetingPoint, meetingTime),
-      getJourneyDetails(coords2, meetingPoint, meetingTime)
-    ]);
+    console.log('Analyzing journey details for meeting point:', meetingPoint);
+    
+    // Try the complex version first, fall back to simple
+    let journey1 = await getJourneyDetails(coords1, meetingPoint, meetingTime);
+    let journey2 = await getJourneyDetails(coords2, meetingPoint, meetingTime);
+    
+    // If complex version failed, try simple version
+    if (!journey1 || !journey2) {
+      console.log('Complex TfL request failed, trying simple version...');
+      journey1 = await getJourneyDetailsSimple(coords1, meetingPoint);
+      journey2 = await getJourneyDetailsSimple(coords2, meetingPoint);
+    }
 
     if (!journey1 || !journey2) {
+      console.log('Both TfL requests failed, skipping this point');
       return null;
     }
 
-    return {
+    const result = {
       journey1,
       journey2,
       timeDifference: Math.abs(journey1.duration - journey2.duration),
       averageTime: (journey1.duration + journey2.duration) / 2
     };
+    
+    console.log('Journey analysis result:', result);
+    return result;
   } catch (error) {
+    console.error('Journey analysis failed:', error);
     return null;
   }
 }
@@ -423,23 +436,35 @@ async function analyzeJourneyDetails(coords1, coords2, meetingPoint, meetingTime
 async function getJourneyDetails(fromCoords, toCoords, meetingTime = null) {
   const time = meetingTime || new Date().toISOString();
   
+  // Build the TfL URL
+  const tflUrl = `https://api.tfl.gov.uk/Journey/JourneyResults/${fromCoords[1]},${fromCoords[0]}/to/${toCoords[1]},${toCoords[0]}?` +
+    `mode=tube,bus,national-rail,dlr,overground,tflrail,walking&` +
+    `time=${encodeURIComponent(time)}&` +
+    `timeIs=Departing&` +
+    `app_key=${API_CONFIG.TFL_API_KEY}`;
+  
+  console.log('TfL API Request URL:', tflUrl);
+  console.log('From coordinates:', fromCoords);
+  console.log('To coordinates:', toCoords);
+  
   try {
     const fetch = (await import('node-fetch')).default;
-    const response = await fetch(
-      `https://api.tfl.gov.uk/Journey/JourneyResults/${fromCoords[1]},${fromCoords[0]}/to/${toCoords[1]},${toCoords[0]}?` +
-      `mode=tube,bus,national-rail,dlr,overground,tflrail,walking&` +
-      `time=${encodeURIComponent(time)}&` +
-      `timeIs=Departing&` +
-      `app_key=${API_CONFIG.TFL_API_KEY}`
-    );
+    const response = await fetch(tflUrl);
+
+    console.log('TfL API Response Status:', response.status);
+    console.log('TfL API Response Headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
-      throw new Error(`TfL API failed: ${response.status}`);
+      const errorText = await response.text();
+      console.error('TfL API Error Response Body:', errorText);
+      throw new Error(`TfL API failed: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
+    console.log('TfL API Success - Journey count:', data.journeys?.length || 0);
     
     if (!data.journeys || data.journeys.length === 0) {
+      console.warn('No journeys returned from TfL API');
       return null;
     }
 
@@ -451,10 +476,51 @@ async function getJourneyDetails(fromCoords, toCoords, meetingTime = null) {
       modes: getJourneyModes(journey)
     };
 
+    console.log('Journey details processed:', details);
     return details;
 
   } catch (error) {
-    console.warn('TfL journey request failed:', error.message);
+    console.error('TfL journey request failed:', error.message);
+    return null;
+  }
+}
+
+async function getJourneyDetailsSimple(fromCoords, toCoords) {
+  // Simplified TfL request without time and with basic modes
+  const tflUrl = `https://api.tfl.gov.uk/Journey/JourneyResults/${fromCoords[1]},${fromCoords[0]}/to/${toCoords[1]},${toCoords[0]}?` +
+    `app_key=${API_CONFIG.TFL_API_KEY}`;
+  
+  console.log('TfL Simple API Request URL:', tflUrl);
+  
+  try {
+    const fetch = (await import('node-fetch')).default;
+    const response = await fetch(tflUrl);
+
+    console.log('TfL Simple API Response Status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('TfL Simple API Error:', errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log('TfL Simple API Success - Journey count:', data.journeys?.length || 0);
+    
+    if (!data.journeys || data.journeys.length === 0) {
+      return null;
+    }
+
+    const journey = data.journeys[0];
+    return {
+      duration: journey.duration || 30, // Fallback duration
+      changes: countJourneyChanges(journey),
+      route: formatJourneyRoute(journey),
+      modes: getJourneyModes(journey)
+    };
+
+  } catch (error) {
+    console.error('TfL simple request failed:', error.message);
     return null;
   }
 }
