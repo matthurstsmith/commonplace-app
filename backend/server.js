@@ -232,6 +232,16 @@ app.post('/api/search/meeting-spots', searchLimiter, async (req, res) => {
 
 // Algorithm implementation
 async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
+  console.log('findOptimalMeetingSpots called with:', { coords1, coords2, meetingTime });
+  
+  if (!coords1 || !coords2) {
+    throw new Error('Invalid coordinates provided to algorithm');
+  }
+  
+  if (!Array.isArray(coords1) || !Array.isArray(coords2)) {
+    throw new Error('Coordinates must be arrays [lng, lat]');
+  }
+  
   console.log('Starting isochrone algorithm...');
   
   const timeIntervals = [20, 30, 40, 50, 60];
@@ -240,19 +250,24 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
   for (const timeMinutes of timeIntervals) {
     console.log(`Generating ${timeMinutes}-minute isochrones...`);
     
-    const [isochrone1, isochrone2] = await Promise.all([
-      getIsochrone(coords1, timeMinutes),
-      getIsochrone(coords2, timeMinutes)
-    ]);
+    try {
+      const [isochrone1, isochrone2] = await Promise.all([
+        getIsochrone(coords1, timeMinutes),
+        getIsochrone(coords2, timeMinutes)
+      ]);
 
-    const intersectionPoints = findIsochroneIntersections(isochrone1, isochrone2);
-    console.log(`Found ${intersectionPoints.length} intersection points for ${timeMinutes} minutes`);
-    
-    allIntersectionPoints.push(...intersectionPoints);
+      const intersectionPoints = findIsochroneIntersections(isochrone1, isochrone2);
+      console.log(`Found ${intersectionPoints.length} intersection points for ${timeMinutes} minutes`);
+      
+      allIntersectionPoints.push(...intersectionPoints);
 
-    if (allIntersectionPoints.length >= 50) {
-      console.log('Sufficient intersection points found');
-      break;
+      if (allIntersectionPoints.length >= 50) {
+        console.log('Sufficient intersection points found');
+        break;
+      }
+    } catch (error) {
+      console.error(`Error generating ${timeMinutes}-minute isochrones:`, error);
+      continue; // Try next time interval
     }
   }
 
