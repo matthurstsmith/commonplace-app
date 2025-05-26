@@ -423,35 +423,63 @@
 
         // Initialize the app
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Commonplace app initialized');
-            initializeEventListeners();
-            setupLocationAutocomplete();
-            checkAPIConnection();
-        });
+    console.log('Commonplace app initialized');
+    
+    // Initialize core functionality first
+    initializeEventListeners();
+    setupLocationAutocomplete();
+    
+    // Test API connection in background (non-blocking)
+    checkAPIConnection().catch(error => {
+        console.error('API connection test failed, but app will continue:', error);
+    });
+});
 
         async function checkAPIConnection() {
-            const statusEl = document.getElementById('connectionStatus');
-            
-            try {
-                console.log('Testing API connection to:', API_BASE_URL);
-                const response = await fetch(`${API_BASE_URL}/health`);
-                const data = await response.json();
-                
-                console.log('API Health Response:', data);
-                
-                if (data.status === 'healthy') {
-                    statusEl.textContent = '✅ Connected to API - Ready to search!';
-                    statusEl.className = 'connection-status connected';
-                } else {
-                    statusEl.textContent = '⚠️ API service is degraded - Some features may not work';
-                    statusEl.className = 'connection-status error';
-                }
-            } catch (error) {
-                console.error('API connection failed:', error);
-                statusEl.textContent = '❌ Could not connect to backend service';
-                statusEl.className = 'connection-status error';
-            }
+    const statusEl = document.getElementById('connectionStatus');
+    
+    try {
+        console.log('Testing API connection to:', API_BASE_URL);
+        
+        // Set timeout for API test
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
+        const response = await fetch(`${API_BASE_URL}/health`, {
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
         }
+        
+        const data = await response.json();
+        console.log('API Health Response:', data);
+        
+        if (data.status === 'healthy') {
+            statusEl.textContent = '✅ Connected to API - Ready to search!';
+            statusEl.className = 'connection-status connected';
+        } else {
+            statusEl.textContent = '⚠️ API service is degraded - Try searching anyway';
+            statusEl.className = 'connection-status error';
+        }
+        
+    } catch (error) {
+        console.error('API connection failed:', error);
+        
+        if (error.name === 'AbortError') {
+            statusEl.textContent = '⚠️ API test timed out - Try searching anyway';
+        } else {
+            statusEl.textContent = '⚠️ Could not connect to API - Try searching anyway';
+        }
+        statusEl.className = 'connection-status error';
+    }
+    
+    // Always enable the search functionality regardless of API test result
+    console.log('Search functionality enabled regardless of API test');
+}
 
         function initializeEventListeners() {
             // Venue type selection
