@@ -31,8 +31,15 @@ const API_CONFIG = {
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
-  credentials: true
+  origin: [
+    'https://commonplace-app-ten.vercel.app',
+    'https://commonplace-48ym45np0-matthurstsmith-gmailcoms-projects.vercel.app',
+    'http://localhost:3000',
+    '*'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json({ limit: '10mb' }));
 
