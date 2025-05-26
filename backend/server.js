@@ -341,6 +341,23 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
 
   scoredPoints.sort((a, b) => b.score - a.score);
   return scoredPoints.slice(0, 3);
+
+  // Score and rank all points
+const scoredPoints = analyzedPoints.map(point => ({
+  ...point,
+  score: calculateConvenienceScore(point)
+}));
+
+// Sort by convenience score
+scoredPoints.sort((a, b) => b.score - a.score);
+
+console.log(`Total scored points: ${scoredPoints.length}`);
+
+// Apply diversity filter to get 3 geographically diverse options
+const diverseResults = selectDiverseLocations(scoredPoints, 3);
+
+console.log(`Selected diverse locations: ${diverseResults.length}`);
+return diverseResults;
 }
 
 async function getIsochrone(coordinates, timeMinutes) {
@@ -434,7 +451,14 @@ async function analyzeJourneyDetails(coords1, coords2, meetingPoint, meetingTime
 }
 
 async function getJourneyDetails(fromCoords, toCoords, meetingTime = null) {
-  const time = meetingTime || new Date().toISOString();
+  // Format time as HHmm for TfL API
+const now = new Date();
+const hours = now.getHours().toString().padStart(2, '0');
+const minutes = now.getMinutes().toString().padStart(2, '0');
+const time = meetingTime ? 
+  new Date(meetingTime).getHours().toString().padStart(2, '0') + 
+  new Date(meetingTime).getMinutes().toString().padStart(2, '0') :
+  hours + minutes;
   
   // Build the TfL URL
   const tflUrl = `https://api.tfl.gov.uk/Journey/JourneyResults/${fromCoords[1]},${fromCoords[0]}/to/${toCoords[1]},${toCoords[0]}?` +
@@ -611,6 +635,89 @@ function calculateConvenienceScore(point) {
   );
   
   return Math.round(finalScore * 10) / 10;
+}
+
+function selectDiverseLocations(scoredPoints, maxResults) {
+  if (scoredPoints.length <= maxResults) {
+    return scoredPoints;
+  }
+
+  const selected = [];
+  const minDistance = 0.01; // ~1km minimum distance between options
+
+  // Always take the best option first
+  selected.push(scoredPoints[0]);
+  console.log(`Selected #1: ${scoredPoints[0].coordinates} (score: ${scoredPoints[0].score})`);
+
+  // For each remaining slot, find the best option that's far enough from existing ones
+  for (let slot = 1; slot < maxResults; slot++) {
+    let bestCandidate = null;
+    let bestScore = -1;
+
+    for (const candidate of scoredPoints) {
+      // Skip if already selected
+      if (selected.some(s => s.coordinates === candidate.coordinates)) {
+        continue;
+      }
+
+      // Check if it's far enough from all selected points
+      const isFarEnough = selected.every(selectedPoint => {
+        const distance = getDistance(candidate.coordinates, selectedPoint.coordinates);
+        return distance >= minDistance * 1000; // Convert km to meters
+      });
+
+      if (isFarEnough && candidate.score > bestScore) {
+        bestCandidate = candidate;
+        bestScore = candidate.score;
+      }
+    }
+
+    if (bestCandidate) {
+      selected.push(bestCandidate);
+      console.log(`Selected #${slot + 1}: ${bestCandidate.coordinates} (score: ${bestCandidate.score})`);
+    } else {
+      // If no candidate is far enough, relax the distance requirement
+      console.log(`No candidate far enough for slot ${slot + 1}, relaxing distance requirement`);
+      const relaxedMinDistance = minDistance * 0.5; // Reduce to ~500m
+      
+      for (const candidate of scoredPoints) {
+        if (selected.some(s => s.coordinates === candidate.coordinates)) {
+          continue;
+        }
+
+        const isFarEnough = selected.every(selectedPoint => {
+          const distance = getDistance(candidate.coordinates, selectedPoint.coordinates);
+          return distance >= relaxedMinDistance * 1000;
+        });
+
+        if (isFarEnough && candidate.score > bestScore) {
+          bestCandidate = candidate;
+          bestScore = candidate.score;
+        }
+      }
+
+      if (bestCandidate) {
+        selected.push(bestCandidate);
+        console.log(`Selected #${slot + 1} (relaxed): ${bestCandidate.coordinates} (score: ${bestCandidate.score})`);
+      }
+    }
+  }
+
+  // If we still don't have enough, fill with the next best options
+  while (selected.length < maxResults && selected.length < scoredPoints.length) {
+    const remaining = scoredPoints.filter(p => 
+      !selected.some(s => s.coordinates === p.coordinates)
+    );
+    
+    if (remaining.length > 0) {
+      selected.push(remaining[0]);
+      console.log(`Filled remaining slot: ${remaining[0].coordinates} (score: ${remaining[0].score})`);
+    } else {
+      break;
+    }
+  }
+
+  return selected;
 }
 
 function getDistance(coord1, coord2) {
