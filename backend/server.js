@@ -2,54 +2,29 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const Redis = require('redis');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Redis client for caching
-let redis;
+// Mock Redis - always works, no external dependencies
+const redis = {
+  get: () => Promise.resolve(null),
+  setEx: () => Promise.resolve('OK'),
+  ping: () => Promise.resolve('PONG')
+};
 
-if (process.env.REDIS_URL) {
-  // Only try to connect if REDIS_URL is provided
-  try {
-    redis = Redis.createClient({
-      url: process.env.REDIS_URL
-    });
-    redis.on('error', (err) => {
-      console.error('Redis Client Error', err);
-      // Fall back to mock if connection fails
-      redis = createMockRedis();
-    });
-    await redis.connect();
-    console.log('Redis connected successfully');
-  } catch (error) {
-    console.warn('Redis connection failed, using mock:', error.message);
-    redis = createMockRedis();
-  }
-} else {
-  console.log('No REDIS_URL provided, running without cache');
-  redis = createMockRedis();
-}
-
-function createMockRedis() {
-  return {
-    get: () => Promise.resolve(null),
-    setEx: () => Promise.resolve('OK'),
-    ping: () => Promise.resolve('PONG')
-  };
-}
+console.log('Using mock Redis (no external cache)');
 
 // API Configuration
 const API_CONFIG = {
   MAPBOX_TOKEN: process.env.MAPBOX_TOKEN,
   TFL_API_KEY: process.env.TFL_API_KEY,
   CACHE_TTL: {
-    GEOCODING: 24 * 60 * 60, // 24 hours
-    ISOCHRONE: 60 * 60, // 1 hour
-    JOURNEY: 5 * 60, // 5 minutes
-    SUGGESTIONS: 60 * 60 // 1 hour
+    GEOCODING: 24 * 60 * 60,
+    ISOCHRONE: 60 * 60,
+    JOURNEY: 5 * 60,
+    SUGGESTIONS: 60 * 60
   }
 };
 
@@ -63,7 +38,7 @@ app.use(express.json({ limit: '10mb' }));
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 100,
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
@@ -71,9 +46,8 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Search rate limiting
 const searchLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 60 * 1000,
   max: 10,
   message: 'Too many search requests, please try again in a minute.',
 });
@@ -89,7 +63,7 @@ app.get('/api/health', async (req, res) => {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       services: {
-        redis: redisStatus === 'PONG' ? 'connected' : 'disconnected',
+        redis: 'mock (no cache)',
         mapbox: hasMapboxKey ? 'configured' : 'missing key',
         tfl: hasTflKey ? 'configured' : 'missing key'
       },
@@ -117,15 +91,7 @@ app.get('/api/locations/suggestions', async (req, res) => {
       return res.status(500).json({ error: 'Mapbox API key not configured' });
     }
 
-    const cacheKey = `suggestions:${query.toLowerCase()}`;
-    
-    // Check cache first
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      return res.json(JSON.parse(cached));
-    }
-
-    // Call Mapbox Geocoding API
+    // Call Mapbox Geocoding API (no caching for now)
     const fetch = (await import('node-fetch')).default;
     const response = await fetch(
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
@@ -148,10 +114,6 @@ app.get('/api/locations/suggestions', async (req, res) => {
     }));
 
     const result = { suggestions };
-    
-    // Cache the result
-    await redis.setEx(cacheKey, API_CONFIG.CACHE_TTL.SUGGESTIONS, JSON.stringify(result));
-    
     res.json(result);
 
   } catch (error) {
@@ -292,13 +254,7 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
 }
 
 async function getIsochrone(coordinates, timeMinutes) {
-  const cacheKey = `isochrone:${coordinates.join(',')}_${timeMinutes}`;
-  
-  const cached = await redis.get(cacheKey);
-  if (cached) {
-    return JSON.parse(cached);
-  }
-
+  // No caching for now - direct API call
   const fetch = (await import('node-fetch')).default;
   const response = await fetch(
     `https://api.mapbox.com/isochrone/v1/mapbox/walking/${coordinates[0]},${coordinates[1]}?` +
@@ -316,10 +272,7 @@ async function getIsochrone(coordinates, timeMinutes) {
     throw new Error('No isochrone data returned');
   }
 
-  const isochrone = data.features[0];
-  await redis.setEx(cacheKey, API_CONFIG.CACHE_TTL.ISOCHRONE, JSON.stringify(isochrone));
-  
-  return isochrone;
+  return data.features[0];
 }
 
 function findIsochroneIntersections(isochrone1, isochrone2) {
@@ -327,7 +280,7 @@ function findIsochroneIntersections(isochrone1, isochrone2) {
   const coords2 = isochrone2.geometry.coordinates[0];
 
   const intersections = [];
-  const gridSize = 0.001; // ~100m
+  const gridSize = 0.001;
 
   const bounds1 = getBounds(coords1);
   const bounds2 = getBounds(coords2);
@@ -378,13 +331,7 @@ async function analyzeJourneyDetails(coords1, coords2, meetingPoint, meetingTime
 }
 
 async function getJourneyDetails(fromCoords, toCoords, meetingTime = null) {
-  const cacheKey = `journey:${fromCoords.join(',')}_${toCoords.join(',')}${meetingTime ? `_${meetingTime}` : ''}`;
-  
-  const cached = await redis.get(cacheKey);
-  if (cached) {
-    return JSON.parse(cached);
-  }
-
+  // No caching for now - direct API call
   const time = meetingTime || new Date().toISOString();
   
   try {
@@ -415,7 +362,6 @@ async function getJourneyDetails(fromCoords, toCoords, meetingTime = null) {
       modes: getJourneyModes(journey)
     };
 
-    await redis.setEx(cacheKey, API_CONFIG.CACHE_TTL.JOURNEY, JSON.stringify(details));
     return details;
 
   } catch (error) {
@@ -528,14 +474,6 @@ function getDistance(coord1, coord2) {
 }
 
 async function geocodeLocation(locationName) {
-  const cacheKey = `geocode:${locationName.toLowerCase()}`;
-  
-  const cached = await redis.get(cacheKey);
-  if (cached) {
-    const data = JSON.parse(cached);
-    return data.coordinates;
-  }
-
   const fetch = (await import('node-fetch')).default;
   const response = await fetch(
     `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locationName)}.json?` +
@@ -554,24 +492,10 @@ async function geocodeLocation(locationName) {
     throw new Error(`Could not find location: ${locationName}`);
   }
 
-  const result = {
-    name: data.features[0].place_name,
-    coordinates: data.features[0].center
-  };
-  
-  await redis.setEx(cacheKey, API_CONFIG.CACHE_TTL.GEOCODING, JSON.stringify(result));
-  return result.coordinates;
+  return data.features[0].center;
 }
 
 async function getLocationName(coordinates) {
-  const cacheKey = `reverse:${coordinates[0].toFixed(4)},${coordinates[1].toFixed(4)}`;
-  
-  const cached = await redis.get(cacheKey);
-  if (cached) {
-    const data = JSON.parse(cached);
-    return data.name;
-  }
-
   try {
     const fetch = (await import('node-fetch')).default;
     const response = await fetch(
@@ -602,9 +526,6 @@ async function getLocationName(coordinates) {
       locationName = area && area !== name ? `${name}, ${area}` : name;
     }
 
-    const result = { name: locationName };
-    await redis.setEx(cacheKey, API_CONFIG.CACHE_TTL.GEOCODING, JSON.stringify(result));
-    
     return locationName;
     
   } catch (error) {
