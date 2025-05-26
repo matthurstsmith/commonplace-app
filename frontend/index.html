@@ -565,6 +565,17 @@
             });
         }
 
+        function validateLondonLocation(locationName) {
+    // Basic validation patterns
+    const londonPatterns = [
+        /london/i,
+        /\b(sw|se|nw|ne|n|s|e|w)\d+\b/i,  // Postcodes
+        /(station|street|road|lane|avenue|square|market|bridge|park|hill|green|common)/i,
+        /(camden|islington|hackney|tower hamlets|southwark|lambeth|wandsworth|hammersmith|kensington|westminster|city of london)/i
+    ];
+    
+    return londonPatterns.some(pattern => pattern.test(locationName));
+}
         function displaySuggestions(suggestions, suggestionsDiv, input) {
             if (suggestions.length === 0) {
                 suggestionsDiv.classList.remove('active');
