@@ -492,31 +492,71 @@
         }
 
         function setupAutocompleteForInput(input, suggestionsDiv) {
-            let timeout;
-            
-            input.addEventListener('input', async function() {
-                clearTimeout(timeout);
-                const query = this.value.trim();
+    let timeout;
+    
+    input.addEventListener('input', async function() {
+        clearTimeout(timeout);
+        const query = this.value.trim();
+        
+        if (query.length < 2) {
+            suggestionsDiv.classList.remove('active');
+            return;
+        }
+
+        timeout = setTimeout(async () => {
+            try {
+                console.log('Getting London-specific suggestions for:', query);
+                const response = await fetch(`${API_BASE_URL}/locations/suggestions?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
                 
-                if (query.length < 2) {
-                    suggestionsDiv.classList.remove('active');
-                    return;
-                }
+                // Filter for London area results only
+                const londonResults = filterLondonResults(data.suggestions || []);
+                displaySuggestions(londonResults, suggestionsDiv, input);
+            } catch (error) {
+                console.error('Suggestions error:', error);
+                // Fallback to no suggestions rather than breaking
+                suggestionsDiv.classList.remove('active');
+            }
+        }, 300);
+    });
 
-                timeout = setTimeout(async () => {
-                    try {
-                        console.log('Getting suggestions for:', query);
-                        const response = await fetch(`${API_BASE_URL}/locations/suggestions?q=${encodeURIComponent(query)}`);
-                        const data = await response.json();
-                        
-                        console.log('Suggestions response:', data);
-                        displaySuggestions(data.suggestions || [], suggestionsDiv, input);
-                    } catch (error) {
-                        console.error('Suggestions error:', error);
-                    }
-                }, 300);
-            });
-
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+            suggestionsDiv.classList.remove('active');
+        }
+    });
+}
+        function filterLondonResults(suggestions) {
+    return suggestions.filter(suggestion => {
+        const name = suggestion.name.toLowerCase();
+        const coords = suggestion.coordinates;
+        
+        // Geographic bounds for Greater London area
+        const londonBounds = {
+            minLat: 51.28,   // South London
+            maxLat: 51.70,   // North London  
+            minLng: -0.51,   // West London
+            maxLng: 0.33     // East London
+        };
+        
+        // Check if coordinates are within London bounds
+        const inBounds = coords[1] >= londonBounds.minLat && 
+                        coords[1] <= londonBounds.maxLat &&
+                        coords[0] >= londonBounds.minLng && 
+                        coords[0] <= londonBounds.maxLng;
+        
+        // Also check if place name contains London-related terms
+        const hasLondonContext = name.includes('london') || 
+                                name.includes('uk') ||
+                                name.match(/\b(sw|se|nw|ne|n|s|e|w)\d+\b/) || // Postcodes
+                                name.includes('station') ||
+                                name.includes('street') ||
+                                name.includes('road');
+        
+        return inBounds || hasLondonContext;
+    }).slice(0, 5); // Limit to top 5 results
+}
             // Hide suggestions when clicking outside
             document.addEventListener('click', function(e) {
                 if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
