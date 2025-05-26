@@ -141,10 +141,54 @@ app.post('/api/search/meeting-spots', searchLimiter, async (req, res) => {
     console.log(`Finding meeting spots between ${location1} and ${location2}`);
     
     // Geocode locations
-    const coords1 = typeof location1 === 'string' ? 
-      await geocodeLocation(location1) : location1;
-    const coords2 = typeof location2 === 'string' ? 
-      await geocodeLocation(location2) : location2;
+    async function geocodeLocation(locationName) {
+    const cacheKey = `geocode:${locationName.toLowerCase()}`;
+    
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+        const data = JSON.parse(cached);
+        return data.coordinates;
+    }
+
+    const fetch = (await import('node-fetch')).default;
+    const response = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locationName)}.json?` +
+        `access_token=${API_CONFIG.MAPBOX_TOKEN}&` +
+        `country=GB&` +
+        `proximity=-0.1278,51.5074&` +  // Central London
+        `bbox=-0.51,51.28,0.33,51.70&` +  // London bounding box
+        `limit=1`
+    );
+
+    if (!response.ok) {
+        throw new Error(`Failed to geocode ${locationName}`);
+    }
+
+    const data = await response.json();
+    if (data.features.length === 0) {
+        throw new Error(`Could not find location: ${locationName} in London area`);
+    }
+
+    // Validate result is in London area
+    const coords = data.features[0].center;
+    const londonBounds = {
+        minLat: 51.28, maxLat: 51.70,
+        minLng: -0.51, maxLng: 0.33
+    };
+    
+    if (coords[1] < londonBounds.minLat || coords[1] > londonBounds.maxLat ||
+        coords[0] < londonBounds.minLng || coords[0] > londonBounds.maxLng) {
+        throw new Error(`${locationName} appears to be outside the London area. Please use a London location.`);
+    }
+
+    const result = {
+        name: data.features[0].place_name,
+        coordinates: coords
+    };
+    
+    await redis.setEx(cacheKey, API_CONFIG.CACHE_TTL.GEOCODING, JSON.stringify(result));
+    return result.coordinates;
+}
 
     // Run the algorithm
     const meetingSpots = await findOptimalMeetingSpots(coords1, coords2, meetingTime);
