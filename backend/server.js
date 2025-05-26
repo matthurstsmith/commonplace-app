@@ -634,7 +634,8 @@ async function getLocationName(coordinates) {
     const response = await fetch(
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${coordinates[0]},${coordinates[1]}.json?` +
       `access_token=${API_CONFIG.MAPBOX_TOKEN}&` +
-      `types=poi,address,neighborhood,place`
+      `types=poi,address,neighborhood,place&` +
+      `limit=3`
     );
 
     if (!response.ok) {
@@ -643,23 +644,38 @@ async function getLocationName(coordinates) {
 
     const data = await response.json();
     
-    let locationName = `Location ${coordinates[1].toFixed(4)}, ${coordinates[0].toFixed(4)}`;
-    
     if (data.features && data.features.length > 0) {
-      const feature = data.features.find(f => 
-        f.place_type.includes('poi') || 
-        f.place_type.includes('neighborhood')
-      ) || data.features[0];
+      // Try to get the most specific location first
+      const poi = data.features.find(f => f.place_type.includes('poi'));
+      const address = data.features.find(f => f.place_type.includes('address'));
+      const neighborhood = data.features.find(f => f.place_type.includes('neighborhood'));
       
-      const name = feature.text || feature.place_name;
-      const area = feature.context ? 
-        feature.context.find(c => c.id.startsWith('neighborhood') || c.id.startsWith('place'))?.text : 
-        null;
+      // Prefer POI, then address, then neighborhood
+      const feature = poi || address || neighborhood || data.features[0];
       
-      locationName = area && area !== name ? `${name}, ${area}` : name;
+      let name = feature.text || feature.place_name;
+      
+      // If it's just "Victoria" or similar, make it more specific
+      if (name.length < 8 || name === 'Victoria') {
+        // Add nearby street or area information
+        const context = feature.context || [];
+        const street = context.find(c => c.id.includes('address') || c.id.includes('street'));
+        const area = context.find(c => c.id.includes('neighborhood') || c.id.includes('place'));
+        
+        if (street && street.text !== name) {
+          name = `${name} (${street.text})`;
+        } else if (area && area.text !== name && !area.text.includes('London')) {
+          name = `${name} (${area.text})`;
+        } else {
+          // Add coordinates to make it unique
+          name = `${name} Area (${coordinates[1].toFixed(3)}, ${coordinates[0].toFixed(3)})`;
+        }
+      }
+      
+      return name;
     }
-
-    return locationName;
+    
+    return `Meeting Point ${coordinates[1].toFixed(3)}, ${coordinates[0].toFixed(3)}`;
     
   } catch (error) {
     console.warn('Reverse geocoding failed:', error);
