@@ -1,4 +1,3 @@
-```markdown
 # Commonplace - Smart Meeting Location Finder
 
 Find the perfect meeting spot using intelligent isochrone mapping and multi-criteria optimization.
@@ -103,4 +102,3 @@ Check the `/docs` folder for detailed guides:
 - `DEPLOYMENT.md` - Step-by-step deployment
 - `API.md` - Complete API documentation
 - `TROUBLESHOOTING.md` - Common issues and solutions
-```
