@@ -1,4 +1,3 @@
-```json
 {
   "name": "commonplace-backend",
   "version": "1.0.0",
@@ -28,4 +27,3 @@
   "author": "Commonplace Team",
   "license": "MIT"
 }
-```
