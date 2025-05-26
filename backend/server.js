@@ -137,6 +137,8 @@ app.get('/api/locations/suggestions', async (req, res) => {
 app.post('/api/search/meeting-spots', searchLimiter, async (req, res) => {
   try {
     const { location1, location2, venueTypes = [], meetingTime } = req.body;
+
+    console.log('Search request received:', { location1, location2, venueTypes, meetingTime });
     
     if (!location1 || !location2) {
       return res.status(400).json({ error: 'Both locations are required' });
