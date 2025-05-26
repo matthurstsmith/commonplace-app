@@ -10,16 +10,31 @@ const PORT = process.env.PORT || 3001;
 
 // Redis client for caching
 let redis;
-try {
-  redis = Redis.createClient({
-    url: process.env.REDIS_URL || 'redis://localhost:6379'
-  });
-  redis.on('error', (err) => console.error('Redis Client Error', err));
-  redis.connect();
-} catch (error) {
-  console.warn('Redis not available, running without cache');
-  // Mock redis for development
-  redis = {
+
+if (process.env.REDIS_URL) {
+  // Only try to connect if REDIS_URL is provided
+  try {
+    redis = Redis.createClient({
+      url: process.env.REDIS_URL
+    });
+    redis.on('error', (err) => {
+      console.error('Redis Client Error', err);
+      // Fall back to mock if connection fails
+      redis = createMockRedis();
+    });
+    await redis.connect();
+    console.log('Redis connected successfully');
+  } catch (error) {
+    console.warn('Redis connection failed, using mock:', error.message);
+    redis = createMockRedis();
+  }
+} else {
+  console.log('No REDIS_URL provided, running without cache');
+  redis = createMockRedis();
+}
+
+function createMockRedis() {
+  return {
     get: () => Promise.resolve(null),
     setEx: () => Promise.resolve('OK'),
     ping: () => Promise.resolve('PONG')
