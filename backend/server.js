@@ -308,26 +308,26 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
     getDistance(a, center) - getDistance(b, center)
   );
 
-  // Analyze candidates
-  const candidatePoints = allIntersectionPoints.slice(0, 30);
-  const analyzedPoints = [];
+  // Analyze MORE candidates to give diversity algorithm more options
+const candidatePoints = allIntersectionPoints.slice(0, 50); // Increased from 30
+const analyzedPoints = [];
 
-  for (const point of candidatePoints) {
-    try {
-      const journeyDetails = await analyzeJourneyDetails(coords1, coords2, point, meetingTime);
-      if (journeyDetails) {
-        analyzedPoints.push({
-          coordinates: point,
-          ...journeyDetails
-        });
-      }
-    } catch (error) {
-      console.warn(`Failed to analyze point ${point}:`, error.message);
-      continue;
+for (const point of candidatePoints) {
+  try {
+    const journeyDetails = await analyzeJourneyDetails(coords1, coords2, point, meetingTime);
+    if (journeyDetails) {
+      analyzedPoints.push({
+        coordinates: point,
+        ...journeyDetails
+      });
     }
-
-    if (analyzedPoints.length >= 15) break;
+  } catch (error) {
+    console.warn(`Failed to analyze point ${point}:`, error.message);
+    continue;
   }
+
+  if (analyzedPoints.length >= 25) break; // Increased from 15
+}
 
   if (analyzedPoints.length === 0) {
     throw new Error('No viable meeting locations found');
@@ -629,85 +629,84 @@ function calculateConvenienceScore(point) {
 }
 
 function selectDiverseLocations(scoredPoints, maxResults) {
+  console.log(`Starting diversity selection from ${scoredPoints.length} points`);
+  
   if (scoredPoints.length <= maxResults) {
     return scoredPoints;
   }
 
+  // Step 1: Sort by score (best first)
+  const sortedPoints = [...scoredPoints].sort((a, b) => b.score - a.score);
+  
+  // Step 2: Apply geographic clustering prevention
   const selected = [];
-  const minDistance = 0.01; // ~1km minimum distance between options
-
-  // Always take the best option first
-  selected.push(scoredPoints[0]);
-  console.log(`Selected #1: ${scoredPoints[0].coordinates} (score: ${scoredPoints[0].score})`);
-
-  // For each remaining slot, find the best option that's far enough from existing ones
-  for (let slot = 1; slot < maxResults; slot++) {
-    let bestCandidate = null;
-    let bestScore = -1;
-
-    for (const candidate of scoredPoints) {
-      // Skip if already selected
-      if (selected.some(s => s.coordinates === candidate.coordinates)) {
-        continue;
-      }
-
-      // Check if it's far enough from all selected points
-      const isFarEnough = selected.every(selectedPoint => {
-        const distance = getDistance(candidate.coordinates, selectedPoint.coordinates);
-        return distance >= minDistance * 1000; // Convert km to meters
-      });
-
-      if (isFarEnough && candidate.score > bestScore) {
-        bestCandidate = candidate;
-        bestScore = candidate.score;
-      }
-    }
-
-    if (bestCandidate) {
-      selected.push(bestCandidate);
-      console.log(`Selected #${slot + 1}: ${bestCandidate.coordinates} (score: ${bestCandidate.score})`);
-    } else {
-      // If no candidate is far enough, relax the distance requirement
-      console.log(`No candidate far enough for slot ${slot + 1}, relaxing distance requirement`);
-      const relaxedMinDistance = minDistance * 0.5; // Reduce to ~500m
+  const minDistance = 0.008; // ~800m - slightly smaller than the other algorithm for London density
+  
+  for (const candidate of sortedPoints) {
+    // Check if this point is too close to any already selected point
+    const isTooClose = selected.some(selectedPoint => {
+      const latDiff = Math.abs(candidate.coordinates[1] - selectedPoint.coordinates[1]);
+      const lonDiff = Math.abs(candidate.coordinates[0] - selectedPoint.coordinates[0]);
       
-      for (const candidate of scoredPoints) {
-        if (selected.some(s => s.coordinates === candidate.coordinates)) {
-          continue;
-        }
-
-        const isFarEnough = selected.every(selectedPoint => {
-          const distance = getDistance(candidate.coordinates, selectedPoint.coordinates);
-          return distance >= relaxedMinDistance * 1000;
-        });
-
-        if (isFarEnough && candidate.score > bestScore) {
-          bestCandidate = candidate;
-          bestScore = candidate.score;
-        }
+      // Use simple lat/lon difference for speed (like the other algorithm)
+      return latDiff < minDistance && lonDiff < minDistance;
+    });
+    
+    if (!isTooClose) {
+      selected.push(candidate);
+      console.log(`Selected diverse location ${selected.length}: [${candidate.coordinates.join(', ')}] (score: ${candidate.score})`);
+      
+      // Stop when we have enough
+      if (selected.length >= maxResults) {
+        break;
       }
-
-      if (bestCandidate) {
-        selected.push(bestCandidate);
-        console.log(`Selected #${slot + 1} (relaxed): ${bestCandidate.coordinates} (score: ${bestCandidate.score})`);
+    } else {
+      console.log(`Skipped location [${candidate.coordinates.join(', ')}] - too close to existing selection`);
+    }
+  }
+  
+  // Step 3: If we still don't have enough, gradually relax the distance requirement
+  if (selected.length < maxResults) {
+    console.log(`Only found ${selected.length} diverse locations, relaxing distance requirement...`);
+    
+    const relaxedDistance = minDistance * 0.6; // Reduce to ~500m
+    
+    for (const candidate of sortedPoints) {
+      if (selected.some(s => s.coordinates === candidate.coordinates)) {
+        continue; // Skip already selected
+      }
+      
+      const isTooClose = selected.some(selectedPoint => {
+        const latDiff = Math.abs(candidate.coordinates[1] - selectedPoint.coordinates[1]);
+        const lonDiff = Math.abs(candidate.coordinates[0] - selectedPoint.coordinates[0]);
+        return latDiff < relaxedDistance && lonDiff < relaxedDistance;
+      });
+      
+      if (!isTooClose) {
+        selected.push(candidate);
+        console.log(`Selected with relaxed distance ${selected.length}: [${candidate.coordinates.join(', ')}] (score: ${candidate.score})`);
+        
+        if (selected.length >= maxResults) {
+          break;
+        }
       }
     }
   }
-
-  // If we still don't have enough, fill with the next best options
-  while (selected.length < maxResults && selected.length < scoredPoints.length) {
-    const remaining = scoredPoints.filter(p => 
-      !selected.some(s => s.coordinates === p.coordinates)
+  
+  // Step 4: Final fallback - just take the best remaining if still not enough
+  while (selected.length < maxResults && selected.length < sortedPoints.length) {
+    const remaining = sortedPoints.find(p => 
+      !selected.some(s => s.coordinates[0] === p.coordinates[0] && s.coordinates[1] === p.coordinates[1])
     );
     
-    if (remaining.length > 0) {
-      selected.push(remaining[0]);
-      console.log(`Filled remaining slot: ${remaining[0].coordinates} (score: ${remaining[0].score})`);
+    if (remaining) {
+      selected.push(remaining);
+      console.log(`Fallback selection ${selected.length}: [${remaining.coordinates.join(', ')}] (score: ${remaining.score})`);
     } else {
       break;
     }
   }
-
+  
   return selected;
 }
 
