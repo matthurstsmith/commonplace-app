@@ -106,6 +106,7 @@ app.get('/api/locations/suggestions', async (req, res) => {
       `access_token=${API_CONFIG.MAPBOX_TOKEN}&` +
       `country=GB&` +
       `proximity=-0.1278,51.5074&` +
+      `bbox=-0.51,51.28,0.33,51.70&` +
       `types=place,postcode,address,poi&` +
       `limit=5`
     );
@@ -133,11 +134,12 @@ app.get('/api/locations/suggestions', async (req, res) => {
   }
 });
 
-// Main search endpoint
+// Main search endpoint - FIXED VERSION
 app.post('/api/search/meeting-spots', searchLimiter, async (req, res) => {
   try {
     const { location1, location2, venueTypes = [], meetingTime } = req.body;
 
+    console.log('=== SEARCH REQUEST START ===');
     console.log('Search request received:', { location1, location2, venueTypes, meetingTime });
     
     if (!location1 || !location2) {
@@ -150,60 +152,23 @@ app.post('/api/search/meeting-spots', searchLimiter, async (req, res) => {
 
     console.log(`Finding meeting spots between ${location1} and ${location2}`);
     
-    // Geocode locations
-    async function geocodeLocation(locationName) {
-    const cacheKey = `geocode:${locationName.toLowerCase()}`;
+    // Step 1: Geocode locations - FIXED: Actually call the geocoding function
+    console.log('Step 1: Geocoding location1:', location1);
+    const coords1 = typeof location1 === 'string' ? 
+      await geocodeLocation(location1) : location1;
+    console.log('coords1 result:', coords1);
     
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-        const data = JSON.parse(cached);
-        return data.coordinates;
-    }
+    console.log('Step 2: Geocoding location2:', location2);
+    const coords2 = typeof location2 === 'string' ? 
+      await geocodeLocation(location2) : location2;
+    console.log('coords2 result:', coords2);
 
-    const fetch = (await import('node-fetch')).default;
-    const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locationName)}.json?` +
-        `access_token=${API_CONFIG.MAPBOX_TOKEN}&` +
-        `country=GB&` +
-        `proximity=-0.1278,51.5074&` +  // Central London
-        `bbox=-0.51,51.28,0.33,51.70&` +  // London bounding box
-        `limit=1`
-    );
-
-    if (!response.ok) {
-        throw new Error(`Failed to geocode ${locationName}`);
-    }
-
-    const data = await response.json();
-    if (data.features.length === 0) {
-        throw new Error(`Could not find location: ${locationName} in London area`);
-    }
-
-    // Validate result is in London area
-    const coords = data.features[0].center;
-    const londonBounds = {
-        minLat: 51.28, maxLat: 51.70,
-        minLng: -0.51, maxLng: 0.33
-    };
-    
-    if (coords[1] < londonBounds.minLat || coords[1] > londonBounds.maxLat ||
-        coords[0] < londonBounds.minLng || coords[0] > londonBounds.maxLng) {
-        throw new Error(`${locationName} appears to be outside the London area. Please use a London location.`);
-    }
-
-    const result = {
-        name: data.features[0].place_name,
-        coordinates: coords
-    };
-    
-    await redis.setEx(cacheKey, API_CONFIG.CACHE_TTL.GEOCODING, JSON.stringify(result));
-    return result.coordinates;
-}
-
-    // Run the algorithm
+    // Step 3: Run the algorithm
+    console.log('Step 3: Starting algorithm with coordinates:', { coords1, coords2 });
     const meetingSpots = await findOptimalMeetingSpots(coords1, coords2, meetingTime);
     
-    // Get location names
+    // Step 4: Get location names
+    console.log('Step 4: Processing results...');
     const resultsWithNames = await Promise.all(
       meetingSpots.map(async (spot, index) => ({
         ...spot,
@@ -212,6 +177,7 @@ app.post('/api/search/meeting-spots', searchLimiter, async (req, res) => {
       }))
     );
 
+    console.log('Step 5: Sending successful response');
     res.json({
       success: true,
       results: resultsWithNames,
@@ -224,13 +190,68 @@ app.post('/api/search/meeting-spots', searchLimiter, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Search error:', error);
+    console.error('=== SEARCH ERROR ===');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    
     res.status(500).json({ 
       error: 'Failed to find meeting spots',
       details: error.message 
     });
   }
 });
+
+// FIXED: Move geocodeLocation function outside the endpoint where it belongs
+async function geocodeLocation(locationName) {
+  console.log('Geocoding location:', locationName);
+  const cacheKey = `geocode:${locationName.toLowerCase()}`;
+  
+  const cached = await redis.get(cacheKey);
+  if (cached) {
+    const data = JSON.parse(cached);
+    return data.coordinates;
+  }
+
+  const fetch = (await import('node-fetch')).default;
+  const response = await fetch(
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locationName)}.json?` +
+    `access_token=${API_CONFIG.MAPBOX_TOKEN}&` +
+    `country=GB&` +
+    `proximity=-0.1278,51.5074&` +  // Central London
+    `bbox=-0.51,51.28,0.33,51.70&` +  // London bounding box
+    `limit=1`
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to geocode ${locationName}`);
+  }
+
+  const data = await response.json();
+  if (data.features.length === 0) {
+    throw new Error(`Could not find location: ${locationName} in London area`);
+  }
+
+  // Validate result is in London area
+  const coords = data.features[0].center;
+  const londonBounds = {
+    minLat: 51.28, maxLat: 51.70,
+    minLng: -0.51, maxLng: 0.33
+  };
+  
+  if (coords[1] < londonBounds.minLat || coords[1] > londonBounds.maxLat ||
+      coords[0] < londonBounds.minLng || coords[0] > londonBounds.maxLng) {
+    throw new Error(`${locationName} appears to be outside the London area. Please use a London location.`);
+  }
+
+  const result = {
+    name: data.features[0].place_name,
+    coordinates: coords
+  };
+  
+  await redis.setEx(cacheKey, API_CONFIG.CACHE_TTL.GEOCODING, JSON.stringify(result));
+  return result.coordinates;
+}
 
 // Algorithm implementation
 async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
@@ -323,7 +344,7 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
 }
 
 async function getIsochrone(coordinates, timeMinutes) {
-  // No caching for now - direct API call
+  console.log(`Getting ${timeMinutes}-minute isochrone for:`, coordinates);
   const fetch = (await import('node-fetch')).default;
   const response = await fetch(
     `https://api.mapbox.com/isochrone/v1/mapbox/walking/${coordinates[0]},${coordinates[1]}?` +
@@ -400,7 +421,6 @@ async function analyzeJourneyDetails(coords1, coords2, meetingPoint, meetingTime
 }
 
 async function getJourneyDetails(fromCoords, toCoords, meetingTime = null) {
-  // No caching for now - direct API call
   const time = meetingTime || new Date().toISOString();
   
   try {
@@ -540,28 +560,6 @@ function getDistance(coord1, coord2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
   return R * c;
-}
-
-async function geocodeLocation(locationName) {
-  const fetch = (await import('node-fetch')).default;
-  const response = await fetch(
-    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locationName)}.json?` +
-    `access_token=${API_CONFIG.MAPBOX_TOKEN}&` +
-    `country=GB&` +
-    `proximity=-0.1278,51.5074&` +
-    `limit=1`
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to geocode ${locationName}`);
-  }
-
-  const data = await response.json();
-  if (data.features.length === 0) {
-    throw new Error(`Could not find location: ${locationName}`);
-  }
-
-  return data.features[0].center;
 }
 
 async function getLocationName(coordinates) {
