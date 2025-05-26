@@ -438,7 +438,7 @@ async function getJourneyDetails(fromCoords, toCoords, meetingTime = null) {
   
   // Build the TfL URL
   const tflUrl = `https://api.tfl.gov.uk/Journey/JourneyResults/${fromCoords[1]},${fromCoords[0]}/to/${toCoords[1]},${toCoords[0]}?` +
-    `mode=tube,bus,national-rail,dlr,overground,tflrail,walking&` +
+    `mode=tube,bus,national-rail,dlr,overground,elizabeth-line,walking&` +
     `time=${encodeURIComponent(time)}&` +
     `timeIs=Departing&` +
     `app_key=${API_CONFIG.TFL_API_KEY}`;
