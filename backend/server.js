@@ -333,15 +333,6 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
     throw new Error('No viable meeting locations found');
   }
 
-  // Score and rank
-  const scoredPoints = analyzedPoints.map(point => ({
-    ...point,
-    score: calculateConvenienceScore(point)
-  }));
-
-  scoredPoints.sort((a, b) => b.score - a.score);
-  return scoredPoints.slice(0, 3);
-
   // Score and rank all points
 const scoredPoints = analyzedPoints.map(point => ({
   ...point,
