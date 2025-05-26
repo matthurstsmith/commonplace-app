@@ -309,7 +309,7 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
   );
 
   // Analyze candidates
-  const candidatePoints = allIntersectionPoints.slice(0, 20);
+  const candidatePoints = allIntersectionPoints.slice(0, 30);
   const analyzedPoints = [];
 
   for (const point of candidatePoints) {
@@ -326,7 +326,7 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
       continue;
     }
 
-    if (analyzedPoints.length >= 10) break;
+    if (analyzedPoints.length >= 15) break;
   }
 
   if (analyzedPoints.length === 0) {
