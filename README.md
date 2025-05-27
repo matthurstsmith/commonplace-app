@@ -4,13 +4,9 @@ Find the perfect meeting spot using intelligent isochrone mapping and multi-crit
 
 ## 🚀 Quick Start
 
-### Backend Deployment (Railway)
+### Backend Deployment (Render)
 
-1. **Deploy to Railway**
-   - Go to [railway.app](https://railway.app)
-   - "New Project" → "Deploy from GitHub repo"
-   - Select this repository
-   - Choose the `backend` folder as root
+1. **Deploy to Render**
 
 2. **Add Environment Variables**
    ```
@@ -20,7 +16,7 @@ Find the perfect meeting spot using intelligent isochrone mapping and multi-crit
    ```
 
 3. **Get Your API URL**
-   - Note the Railway app URL (e.g., `https://your-app.railway.app`)
+   - Note the Render app URL
 
 ### Frontend Deployment (Vercel)
 
@@ -47,13 +43,8 @@ Find the perfect meeting spot using intelligent isochrone mapping and multi-crit
 - **Backend**: Node.js + Express + Redis
 - **Frontend**: Vanilla HTML/CSS/JavaScript
 - **APIs**: Mapbox (isochrones), TfL (journey planning)
-- **Hosting**: Railway (backend), Vercel (frontend)
+- **Hosting**: Render (backend), Vercel (frontend)
 
-## 💰 Costs
-
-- **Railway**: ~$5-20/month (includes Redis)
-- **Vercel**: Free
-- **APIs**: Mapbox free tier (100k requests/month), TfL free
 
 ## 🔧 Development
 
@@ -92,7 +83,7 @@ GET /api/health
 
 ## 🐛 Troubleshooting
 
-1. **API Not Responding**: Check Railway logs and environment variables
+1. **API Not Responding**: Check Render logs and environment variables
 2. **No Search Results**: Verify API keys are correct
 3. **Slow Performance**: Check Redis connection and cache hit rates
 
