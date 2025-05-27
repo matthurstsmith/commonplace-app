@@ -350,6 +350,169 @@
                 gap: 10px;
             }
         }
+        /* Journey planning button styles */
+.journey-buttons {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.button-group {
+    display: flex;
+    gap: 8px;
+}
+
+.journey-button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: white;
+    color: #374151;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    flex: 1;
+    justify-content: center;
+    min-height: 36px;
+}
+
+.journey-button:hover {
+    border-color: #667eea;
+    background: #f8faff;
+    color: #667eea;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.journey-button.google-maps:hover {
+    border-color: #4285f4;
+    color: #4285f4;
+}
+
+.journey-button.citymapper:hover {
+    border-color: #00d4aa;
+    color: #00d4aa;
+}
+
+.button-icon {
+    font-size: 1rem;
+}
+
+.button-text {
+    font-size: 0.8rem;
+}
+
+/* Meeting point action styles */
+.meeting-actions {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 2px solid #f1f5f9;
+}
+
+.meeting-actions-container h4 {
+    color: #1e293b;
+    font-size: 1rem;
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+
+.meeting-button-group {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.meeting-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    background: white;
+    color: #374151;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    flex: 1;
+    min-width: 140px;
+    justify-content: center;
+}
+
+.meeting-button:hover {
+    border-color: #667eea;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.meeting-button.explore:hover {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border-color: #10b981;
+}
+
+.meeting-button.share:hover {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    border-color: #8b5cf6;
+}
+
+/* Toast notification styles */
+.toast-notification {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: #1f2937;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    z-index: 1000;
+    opacity: 0;
+    transition: all 0.3s ease;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+}
+
+.toast-notification.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* Enhanced result card spacing */
+.result-card {
+    margin-bottom: 30px;
+}
+
+.result-card:last-child {
+    margin-bottom: 0;
+}
+
+/* Mobile responsiveness for new elements */
+@media (max-width: 768px) {
+    .button-group {
+        flex-direction: column;
+    }
+    
+    .journey-button {
+        justify-content: flex-start;
+    }
+    
+    .meeting-button-group {
+        flex-direction: column;
+    }
+    
+    .meeting-button {
+        min-width: auto;
+    }
+}
     </style>
 </head>
 <body>
@@ -675,46 +838,61 @@
             }
         }
 
-        function displayResults(results) {
-            const resultsSection = document.getElementById('resultsSection');
-            const resultsGrid = document.getElementById('resultsGrid');
-            
-            if (!results || results.length === 0) {
-                showError('No suitable meeting locations found');
-                return;
-            }
+function displayResults(results) {
+    const resultsSection = document.getElementById('resultsSection');
+    const resultsGrid = document.getElementById('resultsGrid');
+    
+    if (!results || results.length === 0) {
+        showError('No suitable meeting locations found');
+        return;
+    }
 
-            resultsGrid.innerHTML = results.map(result => `
-                <div class="result-card">
-                    <div class="result-header">
-                        <div>
-                            <div class="result-title">${result.locationName}</div>
-                            <div class="result-description">
-                                ${formatResultDescription(result)}
-                            </div>
-                        </div>
-                        <div class="rank-badge">#${result.rank} Best</div>
-                    </div>
-                    
-                    <div class="journey-details">
-                        <div class="journey-card">
-                            <div class="journey-from">From Your Location</div>
-                            <div class="journey-time">${result.journey1.duration} minutes</div>
-                            <div class="journey-route">${result.journey1.route}</div>
-                        </div>
-                        
-                        <div class="journey-card">
-                            <div class="journey-from">From Their Location</div>
-                            <div class="journey-time">${result.journey2.duration} minutes</div>
-                            <div class="journey-route">${result.journey2.route}</div>
-                        </div>
+    resultsGrid.innerHTML = results.map(result => `
+        <div class="result-card">
+            <div class="result-header">
+                <div>
+                    <div class="result-title">${result.name || result.locationName}</div>
+                    <div class="result-description">
+                        ${formatResultDescription(result)}
                     </div>
                 </div>
-            `).join('');
+                <div class="rank-badge">#${result.rank} Best</div>
+            </div>
+            
+            <div class="journey-details">
+                <div class="journey-card">
+                    <div class="journey-from">From Your Location</div>
+                    <div class="journey-time">${result.journey1.duration} minutes</div>
+                    <div class="journey-route">${result.journey1.route}</div>
+                    
+                    <!-- Journey Planning Buttons for User 1 -->
+                    <div class="journey-buttons">
+                        ${generateJourneyButtons(result, 1)}
+                    </div>
+                </div>
+                
+                <div class="journey-card">
+                    <div class="journey-from">From Their Location</div>
+                    <div class="journey-time">${result.journey2.duration} minutes</div>
+                    <div class="journey-route">${result.journey2.route}</div>
+                    
+                    <!-- Journey Planning Buttons for User 2 -->
+                    <div class="journey-buttons">
+                        ${generateJourneyButtons(result, 2)}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Meeting Point Action Buttons -->
+            <div class="meeting-actions">
+                ${generateMeetingPointButtons(result)}
+            </div>
+        </div>
+    `).join('');
 
-            resultsSection.classList.add('active');
-            resultsSection.scrollIntoView({ behavior: 'smooth' });
-        }
+    resultsSection.classList.add('active');
+    resultsSection.scrollIntoView({ behavior: 'smooth' });
+}
 
         function formatResultDescription(result) {
             const timeDiff = result.timeDifference;
@@ -782,6 +960,142 @@
 
         console.log('Commonplace frontend loaded successfully');
         console.log('API URL configured:', API_BASE_URL);
+        
+// Generate journey planning buttons for each user
+function generateJourneyButtons(result, userIndex) {
+    const integrationData = result.integrationData;
+    if (!integrationData) return '';
+    
+    const journeyData = userIndex === 1 ? integrationData.journey1 : integrationData.journey2;
+    
+    return `
+        <div class="button-group">
+            <a href="${journeyData.googleMapsUrl}" 
+               target="_blank" 
+               class="journey-button google-maps"
+               onclick="trackJourneyClick('google-maps', '${result.name}', ${userIndex})">
+                <span class="button-icon">🗺️</span>
+                <span class="button-text">Google Maps</span>
+            </a>
+            
+            <a href="${journeyData.citymapperUrl}" 
+               target="_blank" 
+               class="journey-button citymapper"
+               onclick="trackJourneyClick('citymapper', '${result.name}', ${userIndex})">
+                <span class="button-icon">🚇</span>
+                <span class="button-text">Citymapper</span>
+            </a>
+        </div>
+    `;
+}
+
+// Generate meeting point exploration buttons
+function generateMeetingPointButtons(result) {
+    const coords = result.coordinates;
+    const name = result.name || result.locationName;
+    
+    // Google Maps search for venues in the area
+    const venueSearchUrl = `https://www.google.com/maps/search/cafes+restaurants+near+${encodeURIComponent(name)}/@${coords[1]},${coords[0]},16z`;
+    
+    return `
+        <div class="meeting-actions-container">
+            <h4>Explore ${name}</h4>
+            <div class="meeting-button-group">
+                <a href="${venueSearchUrl}" 
+                   target="_blank" 
+                   class="meeting-button explore"
+                   onclick="trackMeetingAction('explore-venues', '${name}')">
+                    <span class="button-icon">🔍</span>
+                    <span class="button-text">Find Venues Nearby</span>
+                </a>
+                
+                <button class="meeting-button share"
+                        onclick="shareMeetingPoint('${name}', '${coords[1]}', '${coords[0]}')"
+                        class="meeting-button share">
+                    <span class="button-icon">📤</span>
+                    <span class="button-text">Share Location</span>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// Analytics tracking for journey clicks
+function trackJourneyClick(provider, locationName, userIndex) {
+    console.log(`Journey planning click: ${provider} for ${locationName} (User ${userIndex})`);
+    
+    // Add your analytics tracking here if you use Google Analytics
+    if (window.gtag) {
+        gtag('event', 'journey_planning_click', {
+            provider: provider,
+            location: locationName,
+            user_index: userIndex
+        });
+    }
+}
+
+// Analytics tracking for meeting actions
+function trackMeetingAction(action, locationName) {
+    console.log(`Meeting action: ${action} for ${locationName}`);
+    
+    if (window.gtag) {
+        gtag('event', 'meeting_action', {
+            action: action,
+            location: locationName
+        });
+    }
+}
+
+// Share meeting point functionality
+async function shareMeetingPoint(name, lat, lng) {
+    const shareData = {
+        title: `Meet at ${name}`,
+        text: `Let's meet at ${name}!`,
+        url: `https://www.google.com/maps/place/${lat},${lng}`
+    };
+    
+    if (navigator.share) {
+        try {
+            await navigator.share(shareData);
+            console.log('Meeting point shared successfully');
+        } catch (err) {
+            console.log('Error sharing:', err);
+            fallbackShare(shareData);
+        }
+    } else {
+        fallbackShare(shareData);
+    }
+}
+
+// Fallback sharing method
+function fallbackShare(shareData) {
+    // Copy link to clipboard
+    navigator.clipboard.writeText(shareData.url).then(() => {
+        showToast('Meeting point link copied to clipboard!');
+    }).catch(() => {
+        // Fallback: open in new window
+        window.open(shareData.url, '_blank');
+    });
+}
+
+// Toast notification helper
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 100);
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            document.body.removeChild(toast);
+        }, 300);
+    }, 3000);
+}
     </script>
 </body>
 </html>
