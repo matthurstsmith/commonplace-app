@@ -29,6 +29,40 @@ const API_CONFIG = {
   }
 };
 
+// Pre-defined London meeting areas - ADD THIS AT THE TOP OF server.js after the API_CONFIG
+const LONDON_MEETING_AREAS = [
+  // Central London
+  { name: "King's Cross", coordinates: [-0.1240, 51.5308], type: "major_station", zones: [1] },
+  { name: "London Bridge", coordinates: [-0.0864, 51.5049], type: "major_station", zones: [1] },
+  { name: "Victoria", coordinates: [-0.1448, 51.4952], type: "major_station", zones: [1] },
+  { name: "Liverpool Street", coordinates: [-0.0817, 51.5176], type: "major_station", zones: [1] },
+  { name: "Waterloo", coordinates: [-0.1133, 51.5036], type: "major_station", zones: [1] },
+  { name: "Paddington", coordinates: [-0.1759, 51.5154], type: "major_station", zones: [1] },
+  { name: "Oxford Circus", coordinates: [-0.1415, 51.5154], type: "major_station", zones: [1] },
+  { name: "Bond Street", coordinates: [-0.1490, 51.5142], type: "major_station", zones: [1] },
+  { name: "Tottenham Court Road", coordinates: [-0.1308, 51.5165], type: "major_station", zones: [1] },
+  
+  // Zone 1 Districts
+  { name: "Shoreditch", coordinates: [-0.0778, 51.5227], type: "district", zones: [1] },
+  { name: "Clerkenwell", coordinates: [-0.1102, 51.5217], type: "district", zones: [1] },
+  { name: "Bloomsbury", coordinates: [-0.1276, 51.5220], type: "district", zones: [1] },
+  { name: "Covent Garden", coordinates: [-0.1243, 51.5118], type: "district", zones: [1] },
+  { name: "Soho", coordinates: [-0.1317, 51.5142], type: "district", zones: [1] },
+  { name: "Borough Market", coordinates: [-0.0909, 51.5055], type: "district", zones: [1] },
+  { name: "Canary Wharf", coordinates: [-0.0235, 51.5054], type: "major_station", zones: [2] },
+  
+  // Zone 2 Areas
+  { name: "Camden", coordinates: [-0.1426, 51.5390], type: "district", zones: [2] },
+  { name: "Islington", coordinates: [-0.1031, 51.5362], type: "district", zones: [2] },
+  { name: "Clapham", coordinates: [-0.1376, 51.4618], type: "district", zones: [2] },
+  { name: "Brixton", coordinates: [-0.1145, 51.4613], type: "district", zones: [2] },
+  { name: "Greenwich", coordinates: [-0.0088, 51.4825], type: "district", zones: [2, 3] },
+  { name: "Hampstead", coordinates: [-0.1786, 51.5560], type: "district", zones: [2] },
+  { name: "Notting Hill", coordinates: [-0.2058, 51.5090], type: "district", zones: [2] },
+  { name: "Angel", coordinates: [-0.1057, 51.5322], type: "major_station", zones: [1] },
+  { name: "Old Street", coordinates: [-0.0878, 51.5259], type: "major_station", zones: [1] },
+];
+
 // Middleware
 app.use(helmet());
 app.use(cors({
@@ -254,8 +288,9 @@ async function geocodeLocation(locationName) {
 }
 
 // Algorithm implementation
+// REPLACE the existing findOptimalMeetingSpots function with this:
 async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
-  console.log('findOptimalMeetingSpots called with:', { coords1, coords2, meetingTime });
+  console.log('Starting area-based algorithm for coordinates:', { coords1, coords2 });
   
   if (!coords1 || !coords2) {
     throw new Error('Invalid coordinates provided to algorithm');
@@ -267,11 +302,11 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
   
   console.log('Starting isochrone algorithm...');
   
-  const timeIntervals = [20, 30, 40, 50, 60];
-  let allIntersectionPoints = [];
+  const timeIntervals = [20, 30, 45, 60];
+  let accessibleAreas = new Set();
 
   for (const timeMinutes of timeIntervals) {
-    console.log(`Generating ${timeMinutes}-minute isochrones...`);
+    console.log(`Checking ${timeMinutes}-minute accessibility...`);
     
     try {
       const [isochrone1, isochrone2] = await Promise.all([
@@ -279,78 +314,86 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
         getIsochrone(coords2, timeMinutes)
       ]);
 
-      const intersectionPoints = findIsochroneIntersections(isochrone1, isochrone2);
-      console.log(`Found ${intersectionPoints.length} intersection points for ${timeMinutes} minutes`);
-      
-      allIntersectionPoints.push(...intersectionPoints);
+      // Find which predefined areas fall within both isochrones
+      const mutuallyAccessible = LONDON_MEETING_AREAS.filter(area => {
+        const point = area.coordinates;
+        return isPointInPolygon(point, isochrone1.geometry.coordinates[0]) &&
+               isPointInPolygon(point, isochrone2.geometry.coordinates[0]);
+      });
 
-      if (allIntersectionPoints.length >= 50) {
-        console.log('Sufficient intersection points found');
+      mutuallyAccessible.forEach(area => {
+        accessibleAreas.add(`${area.name}:${timeMinutes}`);
+      });
+
+      console.log(`Found ${mutuallyAccessible.length} mutually accessible areas within ${timeMinutes} minutes`);
+      
+      if (accessibleAreas.size >= 15) {
+        console.log('Sufficient accessible areas found');
         break;
       }
+      
     } catch (error) {
-      console.error(`Error generating ${timeMinutes}-minute isochrones:`, error);
-      continue; // Try next time interval
+      console.error(`Error checking ${timeMinutes}-minute accessibility:`, error);
+      continue;
     }
   }
 
-  if (allIntersectionPoints.length === 0) {
-    throw new Error('No overlapping areas found within 60 minutes travel time');
+  if (accessibleAreas.size === 0) {
+    console.log('No mutually accessible predefined areas found, trying fallback...');
+    return await fallbackGeographicAnalysis(coords1, coords2, meetingTime);
   }
 
-  // Sort by distance from center
-  const center = [
-    (coords1[0] + coords2[0]) / 2,
-    (coords1[1] + coords2[1]) / 2
-  ];
+  // Extract unique areas and analyze journey details
+  const uniqueAreas = [...new Set(Array.from(accessibleAreas).map(item => item.split(':')[0]))];
+  const areaObjects = uniqueAreas.map(name => 
+    LONDON_MEETING_AREAS.find(area => area.name === name)
+  ).filter(Boolean);
 
-  allIntersectionPoints.sort((a, b) => 
-    getDistance(a, center) - getDistance(b, center)
-  );
+  console.log(`Analyzing ${areaObjects.length} unique accessible areas:`, 
+    areaObjects.map(a => a.name));
 
-  // Analyze MORE candidates to give diversity algorithm more options
-const candidatePoints = allIntersectionPoints.slice(0, 50); // Increased from 30
-const analyzedPoints = [];
-
-for (const point of candidatePoints) {
-  try {
-    const journeyDetails = await analyzeJourneyDetails(coords1, coords2, point, meetingTime);
-    if (journeyDetails) {
-      analyzedPoints.push({
-        coordinates: point,
-        ...journeyDetails
-      });
+  const analyzedAreas = [];
+  
+  for (const area of areaObjects) {
+    try {
+      const journeyDetails = await analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meetingTime);
+      if (journeyDetails) {
+        analyzedAreas.push({
+          name: area.name,
+          coordinates: area.coordinates,
+          type: area.type,
+          zones: area.zones,
+          ...journeyDetails
+        });
+      }
+    } catch (error) {
+      console.warn(`Failed to analyze area ${area.name}:`, error.message);
+      continue;
     }
-  } catch (error) {
-    console.warn(`Failed to analyze point ${point}:`, error.message);
-    continue;
+
+    if (analyzedAreas.length >= 25) break;
   }
 
-  if (analyzedPoints.length >= 25) break; // Increased from 15
-}
-
-  if (analyzedPoints.length === 0) {
-    throw new Error('No viable meeting locations found');
+  if (analyzedAreas.length === 0) {
+    throw new Error('No viable meeting areas found with journey data');
   }
 
-  // Score and rank all points
-const scoredPoints = analyzedPoints.map(point => ({
-  ...point,
-  score: calculateConvenienceScore(point)
-}));
+  // Score and rank areas
+  const scoredAreas = analyzedAreas.map(area => ({
+    ...area,
+    score: calculateAreaConvenienceScore(area)
+  }));
 
-// Sort by convenience score
-scoredPoints.sort((a, b) => b.score - a.score);
+  scoredAreas.sort((a, b) => b.score - a.score);
 
-console.log(`Total scored points: ${scoredPoints.length}`);
+  console.log(`Scored areas:`, scoredAreas.map(a => `${a.name}: ${a.score}`));
 
-// Apply diversity filter to get 3 geographically diverse options
-const diverseResults = selectDiverseLocations(scoredPoints, 3);
-
-console.log(`Selected diverse locations: ${diverseResults.length}`);
-return diverseResults;
+  // Apply geographic and type diversity
+  const diverseResults = selectDiverseAreas(scoredAreas, 3);
+  
+  console.log(`Final diverse areas selected:`, diverseResults.map(a => a.name));
+  return diverseResults;
 }
-
 async function getIsochrone(coordinates, timeMinutes) {
   console.log(`Getting ${timeMinutes}-minute isochrone for:`, coordinates);
   const fetch = (await import('node-fetch')).default;
@@ -797,5 +840,264 @@ app.listen(PORT, () => {
   console.log(`Commonplace API server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
+async function analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meetingTime = null) {
+  try {
+    console.log(`Analyzing journey integration for ${area.name}...`);
+    
+    // Get journey details for both routes
+    const [journey1Details, journey2Details] = await Promise.all([
+      getJourneyDetailsWithIntegration(coords1, area.coordinates, meetingTime),
+      getJourneyDetailsWithIntegration(coords2, area.coordinates, meetingTime)
+    ]);
+
+    if (!journey1Details || !journey2Details) {
+      return null;
+    }
+
+    return {
+      journey1: journey1Details,
+      journey2: journey2Details,
+      timeDifference: Math.abs(journey1Details.duration - journey2Details.duration),
+      averageTime: (journey1Details.duration + journey2Details.duration) / 2,
+      // Integration data for frontend
+      integrationData: {
+        area: area,
+        journey1: {
+          startCoords: coords1,
+          endCoords: area.coordinates,
+          startName: journey1Details.startLocationName,
+          endName: area.name,
+          googleMapsUrl: generateGoogleMapsUrl(coords1, area.coordinates, journey1Details.startLocationName, area.name),
+          citymapperUrl: generateCitymapperUrl(coords1, area.coordinates, journey1Details.startLocationName, area.name),
+          tflJourneyData: journey1Details.tflData
+        },
+        journey2: {
+          startCoords: coords2,
+          endCoords: area.coordinates,
+          startName: journey2Details.startLocationName,
+          endName: area.name,
+          googleMapsUrl: generateGoogleMapsUrl(coords2, area.coordinates, journey2Details.startLocationName, area.name),
+          citymapperUrl: generateCitymapperUrl(coords2, area.coordinates, journey2Details.startLocationName, area.name),
+          tflJourneyData: journey2Details.tflData
+        }
+      }
+    };
+
+  } catch (error) {
+    console.error('Journey integration analysis failed:', error);
+    return null;
+  }
+}
+
+async function getJourneyDetailsWithIntegration(fromCoords, toCoords, meetingTime = null) {
+  // Get the location name for the start point
+  const startLocationName = await getLocationName(fromCoords);
+  
+  // Get TfL journey data (reuse existing function but store more data)
+  const journey = await getJourneyDetails(fromCoords, toCoords, meetingTime);
+  
+  if (!journey) {
+    return null;
+  }
+
+  return {
+    duration: journey.duration,
+    changes: journey.changes,
+    route: journey.route,
+    modes: journey.modes,
+    startLocationName: startLocationName,
+    tflData: journey // Store journey data for deep links
+  };
+}
+
+function generateGoogleMapsUrl(fromCoords, toCoords, fromName, toName) {
+  const baseUrl = 'https://www.google.com/maps/dir/';
+  
+  // Use location names if available, fallback to coordinates
+  const origin = fromName ? encodeURIComponent(fromName) : `${fromCoords[1]},${fromCoords[0]}`;
+  const destination = toName ? encodeURIComponent(toName) : `${toCoords[1]},${toCoords[0]}`;
+  
+  // Add transit preference and current time
+  const params = new URLSearchParams({
+    api: '1',
+    origin: origin,
+    destination: destination,
+    travelmode: 'transit',
+    dir_action: 'navigate'
+  });
+  
+  return `${baseUrl}?${params.toString()}`;
+}
+
+function generateCitymapperUrl(fromCoords, toCoords, fromName, toName) {
+  const baseUrl = 'https://citymapper.com/directions';
+  
+  const params = new URLSearchParams({
+    startcoord: `${fromCoords[1]},${fromCoords[0]}`,
+    endcoord: `${toCoords[1]},${toCoords[0]}`,
+    startname: fromName || 'Your Location',
+    endname: toName || 'Meeting Point',
+    region_id: 'uk-london'
+  });
+  
+  return `${baseUrl}?${params.toString()}`;
+}
+
+function calculateAreaConvenienceScore(area) {
+  const { journey1, journey2, timeDifference, averageTime, type, zones } = area;
+  
+  const totalChanges = journey1.changes + journey2.changes;
+  const maxZone = Math.max(...zones);
+  
+  // Scoring weights
+  const timeWeight = 0.35;
+  const fairnessWeight = 0.25;
+  const convenienceWeight = 0.25;
+  const locationWeight = 0.15;
+  
+  // Time score (faster is better, penalty after 45 minutes)
+  const timeScore = Math.max(0, (60 - averageTime) / 60 * 100);
+  
+  // Fairness score (smaller difference is better)
+  const fairnessScore = Math.max(0, (20 - timeDifference) / 20 * 100);
+  
+  // Convenience score (fewer changes is better)
+  const convenienceScore = Math.max(0, (4 - totalChanges) / 4 * 100);
+  
+  // Location score (major stations and Zone 1 get bonuses)
+  let locationScore = 50;
+  if (type === 'major_station') locationScore += 30;
+  if (maxZone === 1) locationScore += 20;
+  else if (maxZone === 2) locationScore += 10;
+  
+  const finalScore = (
+    timeScore * timeWeight +
+    fairnessScore * fairnessWeight + 
+    convenienceScore * convenienceWeight +
+    locationScore * locationWeight
+  );
+  
+  return Math.round(finalScore * 10) / 10;
+}
+
+function selectDiverseAreas(scoredAreas, maxResults) {
+  console.log(`Selecting diverse areas from ${scoredAreas.length} candidates`);
+  
+  if (scoredAreas.length <= maxResults) {
+    return scoredAreas;
+  }
+
+  const selected = [];
+  const minDistance = 0.02; // ~2km minimum distance between areas
+  
+  // Priority order: major stations > districts, higher scores first
+  const prioritized = [...scoredAreas].sort((a, b) => {
+    if (Math.abs(a.score - b.score) > 5) {
+      return b.score - a.score;
+    }
+    if (a.type === 'major_station' && b.type !== 'major_station') return -1;
+    if (b.type === 'major_station' && a.type !== 'major_station') return 1;
+    return b.score - a.score;
+  });
+
+  for (const candidate of prioritized) {
+    // Check geographic diversity
+    const isTooClose = selected.some(selectedArea => {
+      const distance = getDistance(candidate.coordinates, selectedArea.coordinates);
+      return distance < 2000; // 2km minimum distance
+    });
+    
+    // Check type diversity
+    const sameTypeCount = selected.filter(s => s.type === candidate.type).length;
+    const shouldSkipForTypeVariety = sameTypeCount >= 2 && selected.length >= 2;
+    
+    if (!isTooClose && !shouldSkipForTypeVariety) {
+      selected.push(candidate);
+      console.log(`Selected area: ${candidate.name} (${candidate.type}, score: ${candidate.score})`);
+      
+      if (selected.length >= maxResults) {
+        break;
+      }
+    } else {
+      const reason = isTooClose ? 'too close' : 'type diversity';
+      console.log(`Skipped ${candidate.name}: ${reason}`);
+    }
+  }
+  
+  // If still need more, relax constraints
+  if (selected.length < maxResults) {
+    console.log(`Only found ${selected.length} diverse areas, relaxing constraints...`);
+    
+    for (const candidate of prioritized) {
+      if (selected.some(s => s.name === candidate.name)) continue;
+      
+      const isTooClose = selected.some(selectedArea => {
+        const distance = getDistance(candidate.coordinates, selectedArea.coordinates);
+        return distance < 1000; // Relax to 1km
+      });
+      
+      if (!isTooClose) {
+        selected.push(candidate);
+        console.log(`Added with relaxed constraints: ${candidate.name}`);
+        
+        if (selected.length >= maxResults) break;
+      }
+    }
+  }
+  
+  return selected;
+}
+
+async function fallbackGeographicAnalysis(coords1, coords2, meetingTime) {
+  console.log('Running fallback geographic analysis...');
+  
+  // Create a broader search around the midpoint
+  const midpoint = [
+    (coords1[0] + coords2[0]) / 2,
+    (coords1[1] + coords2[1]) / 2
+  ];
+  
+  // Find nearest predefined areas to the midpoint
+  const nearbyAreas = LONDON_MEETING_AREAS
+    .map(area => ({
+      ...area,
+      distanceFromMidpoint: getDistance(area.coordinates, midpoint)
+    }))
+    .sort((a, b) => a.distanceFromMidpoint - b.distanceFromMidpoint)
+    .slice(0, 10);
+  
+  console.log('Analyzing areas near midpoint:', nearbyAreas.map(a => a.name));
+  
+  const analyzedAreas = [];
+  for (const area of nearbyAreas) {
+    try {
+      const journeyDetails = await analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meetingTime);
+      if (journeyDetails && journeyDetails.journey1.duration <= 60 && journeyDetails.journey2.duration <= 60) {
+        analyzedAreas.push({
+          name: area.name,
+          coordinates: area.coordinates,
+          type: area.type,
+          zones: area.zones,
+          ...journeyDetails
+        });
+      }
+    } catch (error) {
+      console.warn(`Failed to analyze fallback area ${area.name}:`, error.message);
+    }
+  }
+  
+  if (analyzedAreas.length === 0) {
+    throw new Error('No viable meeting areas found even with fallback analysis');
+  }
+  
+  const scoredAreas = analyzedAreas.map(area => ({
+    ...area,
+    score: calculateAreaConvenienceScore(area)
+  }));
+  
+  scoredAreas.sort((a, b) => b.score - a.score);
+  return selectDiverseAreas(scoredAreas, 3);
+}
 
 module.exports = app;
