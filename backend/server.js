@@ -955,22 +955,12 @@ async function analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meet
 }
 
 function generateGoogleMapsUrl(fromCoords, toCoords, fromName, toName) {
-  const baseUrl = 'https://www.google.com/maps/dir/';
-  
-  // Use location names if available, fallback to coordinates
+  // Use the format that actually works with Google Maps
   const origin = fromName ? encodeURIComponent(fromName) : `${fromCoords[1]},${fromCoords[0]}`;
   const destination = toName ? encodeURIComponent(toName) : `${toCoords[1]},${toCoords[0]}`;
   
-  // Add transit preference and current time
-  const params = new URLSearchParams({
-    api: '1',
-    origin: origin,
-    destination: destination,
-    travelmode: 'transit',
-    dir_action: 'navigate'
-  });
-  
-  return `${baseUrl}?${params.toString()}`;
+  // Simple, reliable Google Maps directions URL
+  return `https://www.google.com/maps/dir/${origin}/${destination}`;
 }
 
 function generateCitymapperUrl(fromCoords, toCoords, fromName, toName) {
