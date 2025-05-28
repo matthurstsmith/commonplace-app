@@ -484,63 +484,106 @@ async function analyzeJourneyDetails(coords1, coords2, meetingPoint, meetingTime
   }
 }
 
-async function getJourneyDetails(fromCoords, toCoords, meetingTime = null) {
-  // Format time as HHmm for TfL API
-const now = new Date();
-const hours = now.getHours().toString().padStart(2, '0');
-const minutes = now.getMinutes().toString().padStart(2, '0');
-const time = meetingTime ? 
-  new Date(meetingTime).getHours().toString().padStart(2, '0') + 
-  new Date(meetingTime).getMinutes().toString().padStart(2, '0') :
-  hours + minutes;
+async function getEnhancedJourneyDetails(fromCoords, toCoords, meetingTime = null) {
+  const now = new Date();
+  const hours = now.getHours().toString().padStart(2, '0');
+  const minutes = now.getMinutes().toString().padStart(2, '0');
+  const time = meetingTime ? 
+    new Date(meetingTime).getHours().toString().padStart(2, '0') + 
+    new Date(meetingTime).getMinutes().toString().padStart(2, '0') :
+    hours + minutes;
   
-  // Build the TfL URL
   const tflUrl = `https://api.tfl.gov.uk/Journey/JourneyResults/${fromCoords[1]},${fromCoords[0]}/to/${toCoords[1]},${toCoords[0]}?` +
     `mode=tube,bus,national-rail,dlr,overground,elizabeth-line,walking&` +
     `time=${encodeURIComponent(time)}&` +
     `timeIs=Departing&` +
     `app_key=${API_CONFIG.TFL_API_KEY}`;
   
-  console.log('TfL API Request URL:', tflUrl);
-  console.log('From coordinates:', fromCoords);
-  console.log('To coordinates:', toCoords);
-  
   try {
     const fetch = (await import('node-fetch')).default;
     const response = await fetch(tflUrl);
 
-    console.log('TfL API Response Status:', response.status);
-    console.log('TfL API Response Headers:', Object.fromEntries(response.headers.entries()));
-
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('TfL API Error Response Body:', errorText);
-      throw new Error(`TfL API failed: ${response.status} - ${errorText}`);
+      console.error('TfL API Error:', response.status);
+      return null;
     }
 
     const data = await response.json();
-    console.log('TfL API Success - Journey count:', data.journeys?.length || 0);
     
     if (!data.journeys || data.journeys.length === 0) {
-      console.warn('No journeys returned from TfL API');
       return null;
     }
 
     const journey = data.journeys[0];
-    const details = {
+    
+    return {
       duration: journey.duration,
       changes: countJourneyChanges(journey),
       route: formatJourneyRoute(journey),
-      modes: getJourneyModes(journey)
+      modes: getJourneyModes(journey),
+      fullData: journey,
+      // NEW: Enhanced journey breakdown
+      steps: extractJourneySteps(journey),
+      lines: extractTransportLines(journey),
+      walkingTime: calculateWalkingTime(journey)
     };
-
-    console.log('Journey details processed:', details);
-    return details;
 
   } catch (error) {
     console.error('TfL journey request failed:', error.message);
     return null;
   }
+}
+
+function extractJourneySteps(journey) {
+  if (!journey.legs) return [];
+  
+  return journey.legs.map(leg => {
+    const step = {
+      mode: leg.mode.name,
+      duration: Math.round(leg.duration),
+      instruction: leg.instruction?.summary || '',
+      departurePoint: leg.departurePoint?.commonName || '',
+      arrivalPoint: leg.arrivalPoint?.commonName || ''
+    };
+    
+    // Add line information for rail/tube modes
+    if (leg.routeOptions && leg.routeOptions.length > 0) {
+      const route = leg.routeOptions[0];
+      step.lineName = route.name || '';
+      step.lineId = route.lineIdentifier?.id || '';
+      step.direction = route.directions && route.directions.length > 0 ? route.directions[0] : '';
+    }
+    
+    return step;
+  });
+}
+
+function extractTransportLines(journey) {
+  if (!journey.legs) return [];
+  
+  const lines = [];
+  journey.legs.forEach(leg => {
+    if (leg.routeOptions && leg.routeOptions.length > 0) {
+      const route = leg.routeOptions[0];
+      if (route.name && route.name !== 'walking') {
+        lines.push({
+          name: route.name,
+          mode: leg.mode.name,
+          id: route.lineIdentifier?.id || ''
+        });
+      }
+    }
+  });
+  
+  return lines;
+}
+
+function calculateWalkingTime(journey) {
+  if (!journey.legs) return 0;
+  
+  return journey.legs
+    .filter(leg => leg.mode.name === 'walking')
+    .reduce((total, leg) => total + leg.duration, 0);
 }
 
 async function getJourneyDetailsSimple(fromCoords, toCoords) {
@@ -890,12 +933,8 @@ async function analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meet
   }
 }
 
-async function getJourneyDetailsWithIntegration(fromCoords, toCoords, meetingTime = null) {
-  // Get the location name for the start point
-  const startLocationName = await getLocationName(fromCoords);
-  
-  // Get TfL journey data (reuse existing function but store more data)
-  const journey = await getJourneyDetails(fromCoords, toCoords, meetingTime);
+  // Get enhanced TfL journey data with line details
+  const journey = await getEnhancedJourneyDetails(fromCoords, toCoords, meetingTime);
   
   if (!journey) {
     return null;
@@ -907,7 +946,11 @@ async function getJourneyDetailsWithIntegration(fromCoords, toCoords, meetingTim
     route: journey.route,
     modes: journey.modes,
     startLocationName: startLocationName,
-    tflData: journey // Store journey data for deep links
+    tflData: journey,
+    // NEW: Add detailed journey steps for preview
+    journeySteps: journey.steps,
+    transportLines: journey.lines,
+    walkingTime: journey.walkingTime
   };
 }
 
