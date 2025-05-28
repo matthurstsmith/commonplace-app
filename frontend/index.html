@@ -513,19 +513,136 @@
         min-width: auto;
     }
 }
+        /* Loading screen styles */
+.loading-screen {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.loading-content {
+    text-align: center;
+    color: white;
+    max-width: 400px;
+    padding: 0 20px;
+}
+
+.loading-content h2 {
+    font-size: 1.8rem;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.loading-content p {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    margin-bottom: 40px;
+}
+
+.loading-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 30px;
+}
+
+.loading-step {
+    padding: 12px 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 25px;
+    font-size: 0.95rem;
+    opacity: 0.5;
+    transition: all 0.3s ease;
+}
+
+.loading-step.active {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+}
+
+/* Results page structure */
+.search-page, .results-page {
+    display: block;
+}
+
+.results-page {
+    display: none;
+}
+
+.results-header {
+    text-align: center;
+    color: white;
+    margin-bottom: 40px;
+    position: relative;
+}
+
+.results-header h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.results-header p {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    margin-bottom: 20px;
+}
+
+.new-search-button {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    padding: 10px 20px;
+    border-radius: 25px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.new-search-button:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-2px);
+}
+
+/* Mobile responsiveness for loading screen */
+@media (max-width: 768px) {
+    .loading-content h2 {
+        font-size: 1.5rem;
+    }
+    
+    .loading-content p {
+        font-size: 1rem;
+    }
+    
+    .results-header h2 {
+        font-size: 1.8rem;
+    }
+}
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>Commonplace</h1>
-            <p>Find the perfect meeting spot with minimal travel time and maximum convenience</p>
-        </div>
+    <div class="header">
+        <h1>Commonplace</h1>
+        <p>Find the perfect meeting spot with minimal travel time and maximum convenience</p>
+    </div>
 
+    <!-- SEARCH PAGE (shown by default) -->
+    <div class="search-page" id="searchPage">
         <div class="main-card">
             <div class="form-section">
                 <div class="input-group">
-                    <label for="location1">Your Location</label>
+                    <label for="location1">Your location</label>
                     <div class="input-container">
                         <input type="text" id="location1" class="location-input" placeholder="Enter your starting location (e.g., London Bridge)">
                         <div class="suggestions" id="suggestions1"></div>
@@ -533,7 +650,7 @@
                 </div>
 
                 <div class="input-group">
-                    <label for="location2">Their Location</label>
+                    <label for="location2">Their location</label>
                     <div class="input-container">
                         <input type="text" id="location2" class="location-input" placeholder="Enter their starting location (e.g., South Kensington)">
                         <div class="suggestions" id="suggestions2"></div>
@@ -541,7 +658,7 @@
                 </div>
 
                 <div class="input-group">
-                    <label>Preferred Venue Types (Optional)</label>
+                    <label>Preferred venue types (optional)</label>
                     <div class="venue-types">
                         <div class="venue-chip" data-type="cafe">Cafe</div>
                         <div class="venue-chip" data-type="restaurant">Restaurant</div>
@@ -552,7 +669,7 @@
                     </div>
                 </div>
 
-                <button class="find-button" id="findLocations">Find Meeting Spots</button>
+                <button class="find-button" id="findLocations">Find meeting spots</button>
                 
                 <div class="connection-status" id="connectionStatus">
                     🔄 Testing API connection...
@@ -560,22 +677,35 @@
                 
                 <div id="errorContainer"></div>
             </div>
+        </div>
+    </div>
 
-            <div class="loading" id="loadingSection">
-                <div class="loading-spinner"></div>
-                <p>Finding the perfect meeting spots...</p>
-                <p style="font-size: 0.9rem; color: #64748b; margin-top: 8px;">Analyzing isochrone maps and optimizing routes</p>
-            </div>
-
-            <div class="results-section" id="resultsSection">
-                <div class="results-header">
-                    <h2>Your Perfect Meeting Spots</h2>
-                    <p>Here are the 3 most convenient locations, ranked by overall convenience and fairness</p>
-                </div>
-                <div class="results-grid" id="resultsGrid"></div>
+    <!-- LOADING SCREEN (hidden by default) -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h2>Finding your perfect meeting spots...</h2>
+            <p>Analyzing transport routes and optimizing convenience</p>
+            <div class="loading-steps">
+                <div class="loading-step active" id="step1">📍 Analyzing locations</div>
+                <div class="loading-step" id="step2">🗺️ Mapping accessible areas</div>
+                <div class="loading-step" id="step3">🚇 Planning transport routes</div>
+                <div class="loading-step" id="step4">⭐ Ranking by convenience</div>
             </div>
         </div>
     </div>
+
+    <!-- RESULTS PAGE (hidden by default) -->
+    <div class="results-page" id="resultsPage">
+        <div class="results-header">
+            <h2>Your perfect meeting spots</h2>
+            <p>Here are the 3 most convenient locations, ranked by overall convenience and fairness</p>
+            <button class="new-search-button" id="newSearchButton">🔍 New search</button>
+        </div>
+        
+        <div class="results-grid" id="resultsGrid"></div>
+    </div>
+</div>
 
     <script>
         // API Configuration
@@ -595,6 +725,20 @@
     // Test API connection in background (non-blocking)
     checkAPIConnection().catch(error => {
         console.error('API connection test failed, but app will continue:', error);
+    });
+    
+    // NEW: Add event listener for new search button
+    document.getElementById('newSearchButton').addEventListener('click', function() {
+        // Clear form
+        document.getElementById('location1').value = '';
+        document.getElementById('location2').value = '';
+        selectedVenueTypes = [];
+        document.querySelectorAll('.venue-chip').forEach(chip => {
+            chip.classList.remove('selected');
+        });
+        
+        // Show search page
+        showSearchPage();
     });
 });
 
@@ -790,53 +934,57 @@
         }
 
         async function handleFindLocations() {
-            const location1 = document.getElementById('location1');
-            const location2 = document.getElementById('location2');
+    const location1 = document.getElementById('location1');
+    const location2 = document.getElementById('location2');
 
-            if (!location1.value.trim() || !location2.value.trim()) {
-                showError('Please enter both locations');
-                return;
-            }
+    if (!location1.value.trim() || !location2.value.trim()) {
+        showError('Please enter both locations');
+        return;
+    }
 
-            try {
-                showLoading(true);
-                hideError();
+    try {
+        // Hide search page and show loading screen
+        showLoadingScreen();
+        hideError();
 
-                console.log('Searching for meeting spots between:', location1.value, 'and', location2.value);
-                
-                const response = await fetch(`${API_BASE_URL}/search/meeting-spots`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        location1: location1.value,
-                        location2: location2.value,
-                        venueTypes: selectedVenueTypes
-                    })
-                });
+        console.log('Searching for meeting spots between:', location1.value, 'and', location2.value);
+        
+        const response = await fetch(`${API_BASE_URL}/search/meeting-spots`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                location1: location1.value,
+                location2: location2.value,
+                venueTypes: selectedVenueTypes
+            })
+        });
 
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `HTTP ${response.status}`);
-                }
-
-                const data = await response.json();
-                console.log('Search results:', data);
-
-                if (data.success && data.results) {
-                    displayResults(data.results);
-                } else {
-                    throw new Error('No results returned from API');
-                }
-
-            } catch (error) {
-                console.error('Search error:', error);
-                showError(`Failed to find meeting locations: ${error.message}`);
-            } finally {
-                showLoading(false);
-            }
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `HTTP ${response.status}`);
         }
+
+        const data = await response.json();
+        console.log('Search results:', data);
+
+        if (data.success && data.results) {
+            // Hide loading screen and show results
+            hideLoadingScreen();
+            showResultsPage();
+            displayResults(data.results);
+        } else {
+            throw new Error('No results returned from API');
+        }
+
+    } catch (error) {
+        console.error('Search error:', error);
+        hideLoadingScreen();
+        showSearchPage();
+        showError(`Failed to find meeting locations: ${error.message}`);
+    }
+}
 
 function displayResults(results) {
     const resultsSection = document.getElementById('resultsSection');
@@ -894,44 +1042,9 @@ function displayResults(results) {
     resultsSection.scrollIntoView({ behavior: 'smooth' });
 }
 
-        function formatResultDescription(result) {
-            const timeDiff = result.timeDifference;
-            const avgTime = Math.round(result.averageTime);
-            const totalChanges = result.journey1.changes + result.journey2.changes;
-            
-            let description = `Average ${avgTime} min travel time`;
-            
-            if (timeDiff <= 5) {
-                description += ' • Very fair timing';
-            } else if (timeDiff <= 10) {
-                description += ' • Reasonably fair timing';
-            }
-            
-            if (totalChanges === 0) {
-                description += ' • Direct routes';
-            } else if (totalChanges <= 2) {
-                description += ' • Minimal changes';
-            } else {
-                description += ` • ${totalChanges} total changes`;
-            }
-            
-            return description;
-        }
+        
 
-        function showLoading(show) {
-            const loadingSection = document.getElementById('loadingSection');
-            const findButton = document.getElementById('findLocations');
-            
-            if (show) {
-                loadingSection.classList.add('active');
-                findButton.disabled = true;
-                findButton.textContent = 'Finding Locations...';
-            } else {
-                loadingSection.classList.remove('active');
-                findButton.disabled = false;
-                findButton.textContent = 'Find Meeting Spots';
-            }
-        }
+        
 
         function showError(message) {
             hideError();
@@ -1095,6 +1208,50 @@ function showToast(message) {
             document.body.removeChild(toast);
         }, 300);
     }, 3000);
+}
+
+// NEW: Page navigation functions
+function showSearchPage() {
+    document.getElementById('searchPage').style.display = 'block';
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('resultsPage').style.display = 'none';
+}
+
+function showLoadingScreen() {
+    document.getElementById('searchPage').style.display = 'none';
+    document.getElementById('loadingScreen').style.display = 'flex';
+    document.getElementById('resultsPage').style.display = 'none';
+    
+    // Animate loading steps
+    animateLoadingSteps();
+}
+
+function hideLoadingScreen() {
+    document.getElementById('loadingScreen').style.display = 'none';
+}
+
+function showResultsPage() {
+    document.getElementById('searchPage').style.display = 'none';
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('resultsPage').style.display = 'block';
+}
+
+function animateLoadingSteps() {
+    const steps = ['step1', 'step2', 'step3', 'step4'];
+    let currentStep = 0;
+    
+    const interval = setInterval(() => {
+        steps.forEach(id => {
+            document.getElementById(id).classList.remove('active');
+        });
+        
+        if (currentStep < steps.length) {
+            document.getElementById(steps[currentStep]).classList.add('active');
+            currentStep++;
+        } else {
+            clearInterval(interval);
+        }
+    }, 800);
 }
     </script>
 </body>
