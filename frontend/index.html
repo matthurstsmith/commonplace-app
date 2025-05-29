@@ -985,7 +985,29 @@
         showError(`Failed to find meeting locations: ${error.message}`);
     }
 }
-
+function formatResultDescription(result) {
+    const timeDiff = result.timeDifference;
+    const avgTime = Math.round(result.averageTime);
+    const totalChanges = result.journey1.changes + result.journey2.changes;
+    
+    let description = `Average ${avgTime} min travel time`;
+    
+    if (timeDiff <= 5) {
+        description += ' • Very fair timing';
+    } else if (timeDiff <= 10) {
+        description += ' • Reasonably fair timing';
+    }
+    
+    if (totalChanges === 0) {
+        description += ' • Direct routes';
+    } else if (totalChanges <= 2) {
+        description += ' • Minimal changes';
+    } else {
+        description += ` • ${totalChanges} total changes`;
+    }
+    
+    return description;
+}
 function displayResults(results) {
     const resultsSection = document.getElementById('resultsSection');
     const resultsGrid = document.getElementById('resultsGrid');
