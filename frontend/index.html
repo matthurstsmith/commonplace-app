@@ -937,4 +937,242 @@
         function showResultsPage() {
             document.getElementById('searchPage').style.display = 'none';
             document.getElementById('loadingScreen').style.display = 'none';
-            document.getElementById('results
+            document.getElementById('resultsPage').style.display = 'block';
+        }
+
+        function animateLoadingSteps() {
+            const steps = ['step1', 'step2', 'step3', 'step4'];
+            let currentStep = 0;
+            
+            const interval = setInterval(() => {
+                steps.forEach(id => {
+                    document.getElementById(id).classList.remove('active');
+                });
+                
+                if (currentStep < steps.length) {
+                    document.getElementById(steps[currentStep]).classList.add('active');
+                    currentStep++;
+                } else {
+                    clearInterval(interval);
+                }
+            }, 800);
+        }
+
+        function displayResults(results) {
+            const resultsGrid = document.getElementById('resultsGrid');
+            
+            if (!results || results.length === 0) {
+                showError('No suitable meeting locations found');
+                return;
+            }
+
+            resultsGrid.innerHTML = results.map((result, index) => `
+                <div class="result-card">
+                    <div class="result-header">
+                        <div>
+                            <div class="result-title">${result.name || result.locationName}</div>
+                        </div>
+                        <div class="rank-badge">#${index + 1} best</div>
+                    </div>
+                    
+                    <div class="journey-details">
+                        <div class="journey-card">
+                            <div class="journey-from">From your location</div>
+                            <div class="journey-time">${result.journey1.duration} minutes</div>
+                            <div class="journey-route">${result.journey1.route}</div>
+                            
+                            <div class="journey-buttons">
+                                ${generateJourneyButtons(result, 1)}
+                            </div>
+                        </div>
+                        
+                        <div class="journey-card">
+                            <div class="journey-from">From their location</div>
+                            <div class="journey-time">${result.journey2.duration} minutes</div>
+                            <div class="journey-route">${result.journey2.route}</div>
+                            
+                            <div class="journey-buttons">
+                                ${generateJourneyButtons(result, 2)}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="meeting-actions">
+                        ${generateMeetingPointButtons(result)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function generateJourneyButtons(result, userIndex) {
+            const integrationData = result.integrationData;
+            if (!integrationData) {
+                // Fallback if integration data isn't available
+                const coords = result.coordinates;
+                const name = result.name || result.locationName;
+                const googleUrl = `https://www.google.com/maps/dir/${name}`;
+                const citymapperUrl = `https://citymapper.com/directions?endcoord=${coords[1]},${coords[0]}&endname=${encodeURIComponent(name)}&region_id=uk-london`;
+                
+                return `
+                    <div class="button-group">
+                        <a href="${googleUrl}" target="_blank" class="journey-button google-maps">
+                            <span class="button-icon">🗺️</span>
+                            <span class="button-text">Google Maps</span>
+                        </a>
+                        <a href="${citymapperUrl}" target="_blank" class="journey-button citymapper">
+                            <span class="button-icon">🚇</span>
+                            <span class="button-text">Citymapper</span>
+                        </a>
+                    </div>
+                `;
+            }
+            
+            const journeyData = userIndex === 1 ? integrationData.journey1 : integrationData.journey2;
+            
+            return `
+                <div class="button-group">
+                    <a href="${journeyData.googleMapsUrl}" 
+                       target="_blank" 
+                       class="journey-button google-maps"
+                       onclick="trackJourneyClick('google-maps', '${result.name}', ${userIndex})">
+                        <span class="button-icon">🗺️</span>
+                        <span class="button-text">Google Maps</span>
+                    </a>
+                    
+                    <a href="${journeyData.citymapperUrl}" 
+                       target="_blank" 
+                       class="journey-button citymapper"
+                       onclick="trackJourneyClick('citymapper', '${result.name}', ${userIndex})">
+                        <span class="button-icon">🚇</span>
+                        <span class="button-text">Citymapper</span>
+                    </a>
+                </div>
+            `;
+        }
+
+        function generateMeetingPointButtons(result) {
+            const coords = result.coordinates;
+            const name = result.name || result.locationName;
+            
+            const venueSearchUrl = `https://www.google.com/maps/search/cafes+restaurants+near+${encodeURIComponent(name)}/@${coords[1]},${coords[0]},16z`;
+            
+            return `
+                <div class="meeting-actions-container">
+                    <h4>Explore ${name}</h4>
+                    <div class="meeting-button-group">
+                        <a href="${venueSearchUrl}" 
+                           target="_blank" 
+                           class="meeting-button explore"
+                           onclick="trackMeetingAction('explore-venues', '${name}')">
+                            <span class="button-icon">🔍</span>
+                            <span class="button-text">Find venues nearby</span>
+                        </a>
+                        
+                        <button class="meeting-button share"
+                                onclick="shareMeetingPoint('${name}', '${coords[1]}', '${coords[0]}')">
+                            <span class="button-icon">📤</span>
+                            <span class="button-text">Share location</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function trackJourneyClick(provider, locationName, userIndex) {
+            console.log(`Journey planning click: ${provider} for ${locationName} (User ${userIndex})`);
+            
+            if (window.gtag) {
+                gtag('event', 'journey_planning_click', {
+                    provider: provider,
+                    location: locationName,
+                    user_index: userIndex
+                });
+            }
+        }
+
+        function trackMeetingAction(action, locationName) {
+            console.log(`Meeting action: ${action} for ${locationName}`);
+            
+            if (window.gtag) {
+                gtag('event', 'meeting_action', {
+                    action: action,
+                    location: locationName
+                });
+            }
+        }
+
+        async function shareMeetingPoint(name, lat, lng) {
+            const googleMapsLink = `https://www.google.com/maps/place/${lat},${lng}`;
+            
+            const shareMessage = `I found the best place for us to meet, which is ${name}, using Commonplace (https://commonplace-app-ten.vercel.app/). Here's a Google Maps link: ${googleMapsLink}`;
+            
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: `Meet at ${name}`,
+                        text: shareMessage
+                    });
+                    console.log('Meeting point shared successfully');
+                    return;
+                } catch (err) {
+                    console.log('Native sharing failed, falling back to clipboard');
+                }
+            }
+            
+            try {
+                await navigator.clipboard.writeText(shareMessage);
+                showToast('Meeting details copied to clipboard! Ready to paste into WhatsApp.');
+            } catch (err) {
+                console.error('Clipboard failed:', err);
+                alert('Copy this message:\n\n' + shareMessage);
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'toast-notification';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 100);
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    document.body.removeChild(toast);
+                }, 300);
+            }, 3000);
+        }
+
+        function showError(message) {
+            hideError();
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.innerHTML = `
+                <strong>Error:</strong> ${message}
+                <br><small>Please check your inputs and try again.</small>
+            `;
+            
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.appendChild(errorDiv);
+            
+            setTimeout(() => {
+                if (errorDiv.parentNode) {
+                    errorDiv.remove();
+                }
+            }, 8000);
+        }
+
+        function hideError() {
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.innerHTML = '';
+        }
+
+        console.log('Commonplace frontend loaded successfully');
+        console.log('API URL configured:', API_BASE_URL);
+    </script>
+</body>
+</html>
