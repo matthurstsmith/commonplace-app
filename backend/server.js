@@ -933,6 +933,8 @@ async function analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meet
   }
 }
 
+async function getJourneyDetailsWithIntegration(fromCoords, toCoords, meetingTime = null) {
+  const startLocationName = await getLocationName(fromCoords);
   // Get enhanced TfL journey data with line details
   const journey = await getEnhancedJourneyDetails(fromCoords, toCoords, meetingTime);
   
