@@ -134,24 +134,121 @@
             cursor: not-allowed;
         }
 
-        .results-section {
-            display: none;
-            padding: 40px;
-            border-top: 1px solid #e2e8f0;
-        }
-
-        .results-section.active {
+        /* Multi-page structure */
+        .search-page, .results-page {
             display: block;
         }
 
+        .results-page {
+            display: none;
+        }
+
+        /* Loading screen styles */
+        .loading-screen {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-content {
+            text-align: center;
+            color: white;
+            max-width: 400px;
+            padding: 0 20px;
+        }
+
+        .loading-content h2 {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .loading-content p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 40px;
+        }
+
+        .loading-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .loading-step {
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 25px;
+            font-size: 0.95rem;
+            opacity: 0.5;
+            transition: all 0.3s ease;
+        }
+
+        .loading-step.active {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Results page styles */
         .results-header {
-            margin-bottom: 30px;
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            position: relative;
         }
 
         .results-header h2 {
-            color: #1e293b;
-            font-size: 1.8rem;
-            margin-bottom: 8px;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .results-header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+
+        .new-search-button {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .new-search-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-2px);
         }
 
         .results-grid {
@@ -165,11 +262,16 @@
             padding: 24px;
             background: white;
             transition: all 0.3s ease;
+            margin-bottom: 30px;
         }
 
         .result-card:hover {
             border-color: #667eea;
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .result-card:last-child {
+            margin-bottom: 0;
         }
 
         .result-header {
@@ -184,11 +286,6 @@
             font-weight: 600;
             color: #1e293b;
             margin-bottom: 4px;
-        }
-
-        .result-description {
-            color: #64748b;
-            font-size: 0.95rem;
         }
 
         .rank-badge {
@@ -235,31 +332,143 @@
             line-height: 1.4;
         }
 
-        .loading {
-            text-align: center;
-            padding: 40px;
-            display: none;
+        /* Journey planning buttons */
+        .journey-buttons {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e2e8f0;
         }
 
-        .loading.active {
-            display: block;
+        .button-group {
+            display: flex;
+            gap: 8px;
         }
 
-        .loading-spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid #e2e8f0;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+        .journey-button {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: white;
+            color: #374151;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            flex: 1;
+            justify-content: center;
+            min-height: 36px;
         }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .journey-button:hover {
+            border-color: #667eea;
+            background: #f8faff;
+            color: #667eea;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
+        .journey-button.google-maps:hover {
+            border-color: #4285f4;
+            color: #4285f4;
+        }
+
+        .journey-button.citymapper:hover {
+            border-color: #00d4aa;
+            color: #00d4aa;
+        }
+
+        .button-icon {
+            font-size: 1rem;
+        }
+
+        .button-text {
+            font-size: 0.8rem;
+        }
+
+        /* Meeting point actions */
+        .meeting-actions {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px solid #f1f5f9;
+        }
+
+        .meeting-actions-container h4 {
+            color: #1e293b;
+            font-size: 1rem;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        .meeting-button-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .meeting-button {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            background: white;
+            color: #374151;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            flex: 1;
+            min-width: 140px;
+            justify-content: center;
+        }
+
+        .meeting-button:hover {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .meeting-button.explore:hover {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-color: #10b981;
+        }
+
+        .meeting-button.share:hover {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            border-color: #8b5cf6;
+        }
+
+        /* Toast notifications */
+        .toast-notification {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #1f2937;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            z-index: 1000;
+            opacity: 0;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        .toast-notification.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Error messages */
         .error-message {
             background: #fef2f2;
             border: 1px solid #fecaca;
@@ -269,6 +478,7 @@
             margin: 20px 0;
         }
 
+        /* Autocomplete */
         .suggestions {
             display: none;
             position: absolute;
@@ -328,6 +538,7 @@
             color: #dc2626;
         }
 
+        /* Mobile responsiveness */
         @media (max-width: 768px) {
             .journey-details {
                 grid-template-columns: 1fr;
@@ -349,363 +560,113 @@
                 flex-direction: column;
                 gap: 10px;
             }
+
+            .button-group {
+                flex-direction: column;
+            }
+            
+            .journey-button {
+                justify-content: flex-start;
+            }
+            
+            .meeting-button-group {
+                flex-direction: column;
+            }
+            
+            .meeting-button {
+                min-width: auto;
+            }
+
+            .loading-content h2 {
+                font-size: 1.5rem;
+            }
+            
+            .loading-content p {
+                font-size: 1rem;
+            }
+            
+            .results-header h2 {
+                font-size: 1.8rem;
+            }
         }
-        /* Journey planning button styles */
-.journey-buttons {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid #e2e8f0;
-}
-
-.button-group {
-    display: flex;
-    gap: 8px;
-}
-
-.journey-button {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 12px;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    background: white;
-    color: #374151;
-    text-decoration: none;
-    font-size: 0.85rem;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    flex: 1;
-    justify-content: center;
-    min-height: 36px;
-}
-
-.journey-button:hover {
-    border-color: #667eea;
-    background: #f8faff;
-    color: #667eea;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.journey-button.google-maps:hover {
-    border-color: #4285f4;
-    color: #4285f4;
-}
-
-.journey-button.citymapper:hover {
-    border-color: #00d4aa;
-    color: #00d4aa;
-}
-
-.button-icon {
-    font-size: 1rem;
-}
-
-.button-text {
-    font-size: 0.8rem;
-}
-
-/* Meeting point action styles */
-.meeting-actions {
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 2px solid #f1f5f9;
-}
-
-.meeting-actions-container h4 {
-    color: #1e293b;
-    font-size: 1rem;
-    margin-bottom: 12px;
-    font-weight: 600;
-}
-
-.meeting-button-group {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.meeting-button {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    border: 2px solid #e2e8f0;
-    border-radius: 10px;
-    background: white;
-    color: #374151;
-    text-decoration: none;
-    font-size: 0.9rem;
-    font-weight: 500;
-    transition: all 0.3s ease;
-    cursor: pointer;
-    flex: 1;
-    min-width: 140px;
-    justify-content: center;
-}
-
-.meeting-button:hover {
-    border-color: #667eea;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-}
-
-.meeting-button.explore:hover {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    border-color: #10b981;
-}
-
-.meeting-button.share:hover {
-    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-    border-color: #8b5cf6;
-}
-
-/* Toast notification styles */
-.toast-notification {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%) translateY(100px);
-    background: #1f2937;
-    color: white;
-    padding: 12px 24px;
-    border-radius: 8px;
-    font-size: 0.9rem;
-    font-weight: 500;
-    z-index: 1000;
-    opacity: 0;
-    transition: all 0.3s ease;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-}
-
-.toast-notification.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-}
-
-/* Enhanced result card spacing */
-.result-card {
-    margin-bottom: 30px;
-}
-
-.result-card:last-child {
-    margin-bottom: 0;
-}
-
-/* Mobile responsiveness for new elements */
-@media (max-width: 768px) {
-    .button-group {
-        flex-direction: column;
-    }
-    
-    .journey-button {
-        justify-content: flex-start;
-    }
-    
-    .meeting-button-group {
-        flex-direction: column;
-    }
-    
-    .meeting-button {
-        min-width: auto;
-    }
-}
-        /* Loading screen styles */
-.loading-screen {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
-.loading-content {
-    text-align: center;
-    color: white;
-    max-width: 400px;
-    padding: 0 20px;
-}
-
-.loading-content h2 {
-    font-size: 1.8rem;
-    margin-bottom: 10px;
-    font-weight: 600;
-}
-
-.loading-content p {
-    font-size: 1.1rem;
-    opacity: 0.9;
-    margin-bottom: 40px;
-}
-
-.loading-steps {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    margin-top: 30px;
-}
-
-.loading-step {
-    padding: 12px 20px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 25px;
-    font-size: 0.95rem;
-    opacity: 0.5;
-    transition: all 0.3s ease;
-}
-
-.loading-step.active {
-    opacity: 1;
-    background: rgba(255, 255, 255, 0.2);
-    transform: scale(1.05);
-}
-
-/* Results page structure */
-.search-page, .results-page {
-    display: block;
-}
-
-.results-page {
-    display: none;
-}
-
-.results-header {
-    text-align: center;
-    color: white;
-    margin-bottom: 40px;
-    position: relative;
-}
-
-.results-header h2 {
-    font-size: 2rem;
-    font-weight: 700;
-    margin-bottom: 10px;
-}
-
-.results-header p {
-    font-size: 1.1rem;
-    opacity: 0.9;
-    margin-bottom: 20px;
-}
-
-.new-search-button {
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    padding: 10px 20px;
-    border-radius: 25px;
-    font-size: 0.9rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.new-search-button:hover {
-    background: rgba(255, 255, 255, 0.3);
-    border-color: rgba(255, 255, 255, 0.5);
-    transform: translateY(-2px);
-}
-
-/* Mobile responsiveness for loading screen */
-@media (max-width: 768px) {
-    .loading-content h2 {
-        font-size: 1.5rem;
-    }
-    
-    .loading-content p {
-        font-size: 1rem;
-    }
-    
-    .results-header h2 {
-        font-size: 1.8rem;
-    }
-}
     </style>
 </head>
 <body>
     <div class="container">
-    <div class="header">
-        <h1>Commonplace</h1>
-        <p>Find the perfect meeting spot with minimal travel time and maximum convenience</p>
-    </div>
+        <div class="header">
+            <h1>Commonplace</h1>
+            <p>Find the perfect meeting spot with minimal travel time and maximum convenience</p>
+        </div>
 
-    <!-- SEARCH PAGE (shown by default) -->
-    <div class="search-page" id="searchPage">
-        <div class="main-card">
-            <div class="form-section">
-                <div class="input-group">
-                    <label for="location1">Your location</label>
-                    <div class="input-container">
-                        <input type="text" id="location1" class="location-input" placeholder="Enter your starting location (e.g., London Bridge)">
-                        <div class="suggestions" id="suggestions1"></div>
+        <!-- SEARCH PAGE (shown by default) -->
+        <div class="search-page" id="searchPage">
+            <div class="main-card">
+                <div class="form-section">
+                    <div class="input-group">
+                        <label for="location1">Your location</label>
+                        <div class="input-container">
+                            <input type="text" id="location1" class="location-input" placeholder="Enter your starting location (e.g., London Bridge)">
+                            <div class="suggestions" id="suggestions1"></div>
+                        </div>
                     </div>
-                </div>
 
-                <div class="input-group">
-                    <label for="location2">Their location</label>
-                    <div class="input-container">
-                        <input type="text" id="location2" class="location-input" placeholder="Enter their starting location (e.g., South Kensington)">
-                        <div class="suggestions" id="suggestions2"></div>
+                    <div class="input-group">
+                        <label for="location2">Their location</label>
+                        <div class="input-container">
+                            <input type="text" id="location2" class="location-input" placeholder="Enter their starting location (e.g., South Kensington)">
+                            <div class="suggestions" id="suggestions2"></div>
+                        </div>
                     </div>
-                </div>
 
-                <div class="input-group">
-                    <label>Preferred venue types (optional)</label>
-                    <div class="venue-types">
-                        <div class="venue-chip" data-type="cafe">Cafe</div>
-                        <div class="venue-chip" data-type="restaurant">Restaurant</div>
-                        <div class="venue-chip" data-type="pub">Pub</div>
-                        <div class="venue-chip" data-type="bar">Bar</div>
-                        <div class="venue-chip" data-type="park">Park</div>
-                        <div class="venue-chip" data-type="coworking">Co-working</div>
+                    <div class="input-group">
+                        <label>Preferred venue types (optional)</label>
+                        <div class="venue-types">
+                            <div class="venue-chip" data-type="cafe">Cafe</div>
+                            <div class="venue-chip" data-type="restaurant">Restaurant</div>
+                            <div class="venue-chip" data-type="pub">Pub</div>
+                            <div class="venue-chip" data-type="bar">Bar</div>
+                            <div class="venue-chip" data-type="park">Park</div>
+                            <div class="venue-chip" data-type="coworking">Co-working</div>
+                        </div>
                     </div>
-                </div>
 
-                <button class="find-button" id="findLocations">Find meeting spots</button>
-                
-                <div class="connection-status" id="connectionStatus">
-                    🔄 Testing API connection...
+                    <button class="find-button" id="findLocations">Find meeting spots</button>
+                    
+                    <div class="connection-status" id="connectionStatus">
+                        🔄 Testing API connection...
+                    </div>
+                    
+                    <div id="errorContainer"></div>
                 </div>
-                
-                <div id="errorContainer"></div>
             </div>
         </div>
-    </div>
 
-    <!-- LOADING SCREEN (hidden by default) -->
-    <div class="loading-screen" id="loadingScreen">
-        <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <h2>Finding your perfect meeting spots...</h2>
-            <p>Analyzing transport routes and optimizing convenience</p>
-            <div class="loading-steps">
-                <div class="loading-step active" id="step1">📍 Analyzing locations</div>
-                <div class="loading-step" id="step2">🗺️ Mapping accessible areas</div>
-                <div class="loading-step" id="step3">🚇 Planning transport routes</div>
-                <div class="loading-step" id="step4">⭐ Ranking by convenience</div>
+        <!-- LOADING SCREEN (hidden by default) -->
+        <div class="loading-screen" id="loadingScreen">
+            <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <h2>Finding your perfect meeting spots...</h2>
+                <p>Analyzing transport routes and optimizing convenience</p>
+                <div class="loading-steps">
+                    <div class="loading-step active" id="step1">📍 Analyzing locations</div>
+                    <div class="loading-step" id="step2">🗺️ Mapping accessible areas</div>
+                    <div class="loading-step" id="step3">🚇 Planning transport routes</div>
+                    <div class="loading-step" id="step4">⭐ Ranking by convenience</div>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- RESULTS PAGE (hidden by default) -->
-    <div class="results-page" id="resultsPage">
-        <div class="results-header">
-            <h2>Your perfect meeting spots</h2>
-            <p>Here are the 3 most convenient locations, ranked by overall convenience and fairness</p>
-            <button class="new-search-button" id="newSearchButton">🔍 New search</button>
+        <!-- RESULTS PAGE (hidden by default) -->
+        <div class="results-page" id="resultsPage">
+            <div class="results-header">
+                <h2>Your perfect meeting spots</h2>
+                <p>Here are the 3 most convenient locations, ranked by overall convenience and fairness</p>
+                <button class="new-search-button" id="newSearchButton">🔍 New search</button>
+            </div>
+            
+            <div class="results-grid" id="resultsGrid"></div>
         </div>
-        
-        <div class="results-grid" id="resultsGrid"></div>
     </div>
-</div>
 
     <script>
         // API Configuration
@@ -716,77 +677,58 @@
 
         // Initialize the app
         document.addEventListener('DOMContentLoaded', function() {
-    console.log('Commonplace app initialized');
-    
-    // Initialize core functionality first
-    initializeEventListeners();
-    setupLocationAutocomplete();
-    
-    // Test API connection in background (non-blocking)
-    checkAPIConnection().catch(error => {
-        console.error('API connection test failed, but app will continue:', error);
-    });
-    
-    // NEW: Add event listener for new search button
-    document.getElementById('newSearchButton').addEventListener('click', function() {
-        // Clear form
-        document.getElementById('location1').value = '';
-        document.getElementById('location2').value = '';
-        selectedVenueTypes = [];
-        document.querySelectorAll('.venue-chip').forEach(chip => {
-            chip.classList.remove('selected');
+            console.log('Commonplace app initialized');
+            
+            initializeEventListeners();
+            setupLocationAutocomplete();
+            
+            // Test API connection in background
+            checkAPIConnection().catch(error => {
+                console.error('API connection test failed, but app will continue:', error);
+            });
         });
-        
-        // Show search page
-        showSearchPage();
-    });
-});
 
         async function checkAPIConnection() {
-    const statusEl = document.getElementById('connectionStatus');
-    
-    try {
-        console.log('Testing API connection to:', API_BASE_URL);
-        
-        // Set timeout for API test
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-        
-        const response = await fetch(`${API_BASE_URL}/health`, {
-            signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            const statusEl = document.getElementById('connectionStatus');
+            
+            try {
+                console.log('Testing API connection to:', API_BASE_URL);
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                
+                const response = await fetch(`${API_BASE_URL}/health`, {
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('API Health Response:', data);
+                
+                if (data.status === 'healthy') {
+                    statusEl.textContent = '✅ Connected to API - Ready to search!';
+                    statusEl.className = 'connection-status connected';
+                } else {
+                    statusEl.textContent = '⚠️ API service is degraded - Try searching anyway';
+                    statusEl.className = 'connection-status error';
+                }
+                
+            } catch (error) {
+                console.error('API connection failed:', error);
+                
+                if (error.name === 'AbortError') {
+                    statusEl.textContent = '⚠️ API test timed out - Try searching anyway';
+                } else {
+                    statusEl.textContent = '⚠️ Could not connect to API - Try searching anyway';
+                }
+                statusEl.className = 'connection-status error';
+            }
         }
-        
-        const data = await response.json();
-        console.log('API Health Response:', data);
-        
-        if (data.status === 'healthy') {
-            statusEl.textContent = '✅ Connected to API - Ready to search!';
-            statusEl.className = 'connection-status connected';
-        } else {
-            statusEl.textContent = '⚠️ API service is degraded - Try searching anyway';
-            statusEl.className = 'connection-status error';
-        }
-        
-    } catch (error) {
-        console.error('API connection failed:', error);
-        
-        if (error.name === 'AbortError') {
-            statusEl.textContent = '⚠️ API test timed out - Try searching anyway';
-        } else {
-            statusEl.textContent = '⚠️ Could not connect to API - Try searching anyway';
-        }
-        statusEl.className = 'connection-status error';
-    }
-    
-    // Always enable the search functionality regardless of API test result
-    console.log('Search functionality enabled regardless of API test');
-}
 
         function initializeEventListeners() {
             // Venue type selection
@@ -814,6 +756,20 @@
             document.getElementById('location2').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') handleFindLocations();
             });
+
+            // New search button
+            document.getElementById('newSearchButton').addEventListener('click', function() {
+                // Clear form
+                document.getElementById('location1').value = '';
+                document.getElementById('location2').value = '';
+                selectedVenueTypes = [];
+                document.querySelectorAll('.venue-chip').forEach(chip => {
+                    chip.classList.remove('selected');
+                });
+                
+                // Show search page
+                showSearchPage();
+            });
         }
 
         function setupLocationAutocomplete() {
@@ -827,90 +783,66 @@
         }
 
         function setupAutocompleteForInput(input, suggestionsDiv) {
-    let timeout;
-    
-    input.addEventListener('input', async function() {
-        clearTimeout(timeout);
-        const query = this.value.trim();
-        
-        if (query.length < 2) {
-            suggestionsDiv.classList.remove('active');
-            return;
-        }
-
-        timeout = setTimeout(async () => {
-            try {
-                console.log('Getting London-specific suggestions for:', query);
-                const response = await fetch(`${API_BASE_URL}/locations/suggestions?q=${encodeURIComponent(query)}`);
-                const data = await response.json();
+            let timeout;
+            
+            input.addEventListener('input', async function() {
+                clearTimeout(timeout);
+                const query = this.value.trim();
                 
-                // Filter for London area results only
-                const londonResults = filterLondonResults(data.suggestions || []);
-                displaySuggestions(londonResults, suggestionsDiv, input);
-            } catch (error) {
-                console.error('Suggestions error:', error);
-                // Fallback to no suggestions rather than breaking
-                suggestionsDiv.classList.remove('active');
-            }
-        }, 300);
-    });
+                if (query.length < 2) {
+                    suggestionsDiv.classList.remove('active');
+                    return;
+                }
 
-    // Hide suggestions when clicking outside
-    document.addEventListener('click', function(e) {
-        if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
-            suggestionsDiv.classList.remove('active');
-        }
-    });
-}
-        function filterLondonResults(suggestions) {
-    return suggestions.filter(suggestion => {
-        const name = suggestion.name.toLowerCase();
-        const coords = suggestion.coordinates;
-        
-        // Geographic bounds for Greater London area
-        const londonBounds = {
-            minLat: 51.28,   // South London
-            maxLat: 51.70,   // North London  
-            minLng: -0.51,   // West London
-            maxLng: 0.33     // East London
-        };
-        
-        // Check if coordinates are within London bounds
-        const inBounds = coords[1] >= londonBounds.minLat && 
-                        coords[1] <= londonBounds.maxLat &&
-                        coords[0] >= londonBounds.minLng && 
-                        coords[0] <= londonBounds.maxLng;
-        
-        // Also check if place name contains London-related terms
-        const hasLondonContext = name.includes('london') || 
-                                name.includes('uk') ||
-                                name.match(/\b(sw|se|nw|ne|n|s|e|w)\d+\b/) || // Postcodes
-                                name.includes('station') ||
-                                name.includes('street') ||
-                                name.includes('road');
-        
-        return inBounds || hasLondonContext;
-    }).slice(0, 5); // Limit to top 5 results
-}
+                timeout = setTimeout(async () => {
+                    try {
+                        console.log('Getting London-specific suggestions for:', query);
+                        const response = await fetch(`${API_BASE_URL}/locations/suggestions?q=${encodeURIComponent(query)}`);
+                        const data = await response.json();
+                        
+                        const londonResults = filterLondonResults(data.suggestions || []);
+                        displaySuggestions(londonResults, suggestionsDiv, input);
+                    } catch (error) {
+                        console.error('Suggestions error:', error);
+                        suggestionsDiv.classList.remove('active');
+                    }
+                }, 300);
+            });
+
             // Hide suggestions when clicking outside
             document.addEventListener('click', function(e) {
                 if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
                     suggestionsDiv.classList.remove('active');
                 }
             });
-        
+        }
 
-        function validateLondonLocation(locationName) {
-    // Basic validation patterns
-    const londonPatterns = [
-        /london/i,
-        /\b(sw|se|nw|ne|n|s|e|w)\d+\b/i,  // Postcodes
-        /(station|street|road|lane|avenue|square|market|bridge|park|hill|green|common)/i,
-        /(camden|islington|hackney|tower hamlets|southwark|lambeth|wandsworth|hammersmith|kensington|westminster|city of london)/i
-    ];
-    
-    return londonPatterns.some(pattern => pattern.test(locationName));
-}
+        function filterLondonResults(suggestions) {
+            return suggestions.filter(suggestion => {
+                const name = suggestion.name.toLowerCase();
+                const coords = suggestion.coordinates;
+                
+                const londonBounds = {
+                    minLat: 51.28, maxLat: 51.70,
+                    minLng: -0.51, maxLng: 0.33
+                };
+                
+                const inBounds = coords[1] >= londonBounds.minLat && 
+                                coords[1] <= londonBounds.maxLat &&
+                                coords[0] >= londonBounds.minLng && 
+                                coords[0] <= londonBounds.maxLng;
+                
+                const hasLondonContext = name.includes('london') || 
+                                        name.includes('uk') ||
+                                        name.match(/\b(sw|se|nw|ne|n|s|e|w)\d+\b/) ||
+                                        name.includes('station') ||
+                                        name.includes('street') ||
+                                        name.includes('road');
+                
+                return inBounds || hasLondonContext;
+            }).slice(0, 5);
+        }
+
         function displaySuggestions(suggestions, suggestionsDiv, input) {
             if (suggestions.length === 0) {
                 suggestionsDiv.classList.remove('active');
@@ -923,7 +855,6 @@
 
             suggestionsDiv.classList.add('active');
 
-            // Add click handlers
             suggestionsDiv.querySelectorAll('.suggestion-item').forEach(item => {
                 item.addEventListener('click', function() {
                     input.value = this.dataset.name;
@@ -934,347 +865,76 @@
         }
 
         async function handleFindLocations() {
-    const location1 = document.getElementById('location1');
-    const location2 = document.getElementById('location2');
+            const location1 = document.getElementById('location1');
+            const location2 = document.getElementById('location2');
 
-    if (!location1.value.trim() || !location2.value.trim()) {
-        showError('Please enter both locations');
-        return;
-    }
+            if (!location1.value.trim() || !location2.value.trim()) {
+                showError('Please enter both locations');
+                return;
+            }
 
-    try {
-        // Hide search page and show loading screen
-        showLoadingScreen();
-        hideError();
+            try {
+                showLoadingScreen();
+                hideError();
 
-        console.log('Searching for meeting spots between:', location1.value, 'and', location2.value);
-        
-        const response = await fetch(`${API_BASE_URL}/search/meeting-spots`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                location1: location1.value,
-                location2: location2.value,
-                venueTypes: selectedVenueTypes
-            })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log('Search results:', data);
-
-        if (data.success && data.results) {
-            // Hide loading screen and show results
-            hideLoadingScreen();
-            showResultsPage();
-            displayResults(data.results);
-        } else {
-            throw new Error('No results returned from API');
-        }
-
-    } catch (error) {
-        console.error('Search error:', error);
-        hideLoadingScreen();
-        showSearchPage();
-        showError(`Failed to find meeting locations: ${error.message}`);
-    }
-}
-function formatResultDescription(result) {
-    const timeDiff = result.timeDifference;
-    const avgTime = Math.round(result.averageTime);
-    const totalChanges = result.journey1.changes + result.journey2.changes;
-    
-    let description = `Average ${avgTime} min travel time`;
-    
-    if (timeDiff <= 5) {
-        description += ' • Very fair timing';
-    } else if (timeDiff <= 10) {
-        description += ' • Reasonably fair timing';
-    }
-    
-    if (totalChanges === 0) {
-        description += ' • Direct routes';
-    } else if (totalChanges <= 2) {
-        description += ' • Minimal changes';
-    } else {
-        description += ` • ${totalChanges} total changes`;
-    }
-    
-    return description;
-}
-function displayResults(results) {
-    const resultsSection = document.getElementById('resultsSection');
-    const resultsGrid = document.getElementById('resultsGrid');
-    
-    if (!results || results.length === 0) {
-        showError('No suitable meeting locations found');
-        return;
-    }
-
-    resultsGrid.innerHTML = results.map(result => `
-        <div class="result-card">
-            <div class="result-header">
-                <div>
-                    <div class="result-title">${result.name || result.locationName}</div>
-                    <div class="result-description">
-                        ${formatResultDescription(result)}
-                    </div>
-                </div>
-                <div class="rank-badge">#${result.rank} Best</div>
-            </div>
-            
-            <div class="journey-details">
-                <div class="journey-card">
-                    <div class="journey-from">From Your Location</div>
-                    <div class="journey-time">${result.journey1.duration} minutes</div>
-                    <div class="journey-route">${result.journey1.route}</div>
-                    
-                    <!-- Journey Planning Buttons for User 1 -->
-                    <div class="journey-buttons">
-                        ${generateJourneyButtons(result, 1)}
-                    </div>
-                </div>
+                console.log('Searching for meeting spots between:', location1.value, 'and', location2.value);
                 
-                <div class="journey-card">
-                    <div class="journey-from">From Their Location</div>
-                    <div class="journey-time">${result.journey2.duration} minutes</div>
-                    <div class="journey-route">${result.journey2.route}</div>
-                    
-                    <!-- Journey Planning Buttons for User 2 -->
-                    <div class="journey-buttons">
-                        ${generateJourneyButtons(result, 2)}
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Meeting Point Action Buttons -->
-            <div class="meeting-actions">
-                ${generateMeetingPointButtons(result)}
-            </div>
-        </div>
-    `).join('');
+                const response = await fetch(`${API_BASE_URL}/search/meeting-spots`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        location1: location1.value,
+                        location2: location2.value,
+                        venueTypes: selectedVenueTypes
+                    })
+                });
 
-    resultsSection.classList.add('active');
-    resultsSection.scrollIntoView({ behavior: 'smooth' });
-}
-
-        
-
-        
-
-        function showError(message) {
-            hideError();
-            
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error-message';
-            errorDiv.innerHTML = `
-                <strong>Error:</strong> ${message}
-                <br><small>Please check your inputs and try again.</small>
-            `;
-            
-            const errorContainer = document.getElementById('errorContainer');
-            errorContainer.appendChild(errorDiv);
-            
-            setTimeout(() => {
-                if (errorDiv.parentNode) {
-                    errorDiv.remove();
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
                 }
-            }, 8000);
+
+                const data = await response.json();
+                console.log('Search results:', data);
+
+                if (data.success && data.results) {
+                    hideLoadingScreen();
+                    showResultsPage();
+                    displayResults(data.results);
+                } else {
+                    throw new Error('No results returned from API');
+                }
+
+            } catch (error) {
+                console.error('Search error:', error);
+                hideLoadingScreen();
+                showSearchPage();
+                showError(`Failed to find meeting locations: ${error.message}`);
+            }
         }
 
-        function hideError() {
-            const errorContainer = document.getElementById('errorContainer');
-            errorContainer.innerHTML = '';
+        // Page navigation functions
+        function showSearchPage() {
+            document.getElementById('searchPage').style.display = 'block';
+            document.getElementById('loadingScreen').style.display = 'none';
+            document.getElementById('resultsPage').style.display = 'none';
         }
 
-        console.log('Commonplace frontend loaded successfully');
-        console.log('API URL configured:', API_BASE_URL);
-        
-// Generate journey planning buttons for each user
-function generateJourneyButtons(result, userIndex) {
-    const integrationData = result.integrationData;
-    if (!integrationData) return '';
-    
-    const journeyData = userIndex === 1 ? integrationData.journey1 : integrationData.journey2;
-    
-    return `
-        <div class="button-group">
-            <a href="${journeyData.googleMapsUrl}" 
-               target="_blank" 
-               class="journey-button google-maps"
-               onclick="trackJourneyClick('google-maps', '${result.name}', ${userIndex})">
-                <span class="button-icon">🗺️</span>
-                <span class="button-text">Google Maps</span>
-            </a>
+        function showLoadingScreen() {
+            document.getElementById('searchPage').style.display = 'none';
+            document.getElementById('loadingScreen').style.display = 'flex';
+            document.getElementById('resultsPage').style.display = 'none';
             
-            <a href="${journeyData.citymapperUrl}" 
-               target="_blank" 
-               class="journey-button citymapper"
-               onclick="trackJourneyClick('citymapper', '${result.name}', ${userIndex})">
-                <span class="button-icon">🚇</span>
-                <span class="button-text">Citymapper</span>
-            </a>
-        </div>
-    `;
-}
-
-// Generate meeting point exploration buttons
-function generateMeetingPointButtons(result) {
-    const coords = result.coordinates;
-    const name = result.name || result.locationName;
-    
-    // Google Maps search for venues in the area
-    const venueSearchUrl = `https://www.google.com/maps/search/cafes+restaurants+near+${encodeURIComponent(name)}/@${coords[1]},${coords[0]},16z`;
-    
-    return `
-        <div class="meeting-actions-container">
-            <h4>Explore ${name}</h4>
-            <div class="meeting-button-group">
-                <a href="${venueSearchUrl}" 
-                   target="_blank" 
-                   class="meeting-button explore"
-                   onclick="trackMeetingAction('explore-venues', '${name}')">
-                    <span class="button-icon">🔍</span>
-                    <span class="button-text">Find Venues Nearby</span>
-                </a>
-                
-                <button class="meeting-button share"
-                        onclick="shareMeetingPoint('${name}', '${coords[1]}', '${coords[0]}')"
-                        class="meeting-button share">
-                    <span class="button-icon">📤</span>
-                    <span class="button-text">Share Location</span>
-                </button>
-            </div>
-        </div>
-    `;
-}
-
-// Analytics tracking for journey clicks
-function trackJourneyClick(provider, locationName, userIndex) {
-    console.log(`Journey planning click: ${provider} for ${locationName} (User ${userIndex})`);
-    
-    // Add your analytics tracking here if you use Google Analytics
-    if (window.gtag) {
-        gtag('event', 'journey_planning_click', {
-            provider: provider,
-            location: locationName,
-            user_index: userIndex
-        });
-    }
-}
-
-// Analytics tracking for meeting actions
-function trackMeetingAction(action, locationName) {
-    console.log(`Meeting action: ${action} for ${locationName}`);
-    
-    if (window.gtag) {
-        gtag('event', 'meeting_action', {
-            action: action,
-            location: locationName
-        });
-    }
-}
-
-// Share meeting point functionality
-async function shareMeetingPoint(name, lat, lng) {
-    const shareData = {
-        title: `Meet at ${name}`,
-        text: `Let's meet at ${name}!`,
-        url: `https://www.google.com/maps/place/${lat},${lng}`
-    };
-    
-    if (navigator.share) {
-        try {
-            await navigator.share(shareData);
-            console.log('Meeting point shared successfully');
-        } catch (err) {
-            console.log('Error sharing:', err);
-            fallbackShare(shareData);
+            animateLoadingSteps();
         }
-    } else {
-        fallbackShare(shareData);
-    }
-}
 
-// Fallback sharing method
-function fallbackShare(shareData) {
-    // Copy link to clipboard
-    navigator.clipboard.writeText(shareData.url).then(() => {
-        showToast('Meeting point link copied to clipboard!');
-    }).catch(() => {
-        // Fallback: open in new window
-        window.open(shareData.url, '_blank');
-    });
-}
-
-// Toast notification helper
-function showToast(message) {
-    const toast = document.createElement('div');
-    toast.className = 'toast-notification';
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.classList.add('show');
-    }, 100);
-    
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => {
-            document.body.removeChild(toast);
-        }, 300);
-    }, 3000);
-}
-
-// NEW: Page navigation functions
-function showSearchPage() {
-    document.getElementById('searchPage').style.display = 'block';
-    document.getElementById('loadingScreen').style.display = 'none';
-    document.getElementById('resultsPage').style.display = 'none';
-}
-
-function showLoadingScreen() {
-    document.getElementById('searchPage').style.display = 'none';
-    document.getElementById('loadingScreen').style.display = 'flex';
-    document.getElementById('resultsPage').style.display = 'none';
-    
-    // Animate loading steps
-    animateLoadingSteps();
-}
-
-function hideLoadingScreen() {
-    document.getElementById('loadingScreen').style.display = 'none';
-}
-
-function showResultsPage() {
-    document.getElementById('searchPage').style.display = 'none';
-    document.getElementById('loadingScreen').style.display = 'none';
-    document.getElementById('resultsPage').style.display = 'block';
-}
-
-function animateLoadingSteps() {
-    const steps = ['step1', 'step2', 'step3', 'step4'];
-    let currentStep = 0;
-    
-    const interval = setInterval(() => {
-        steps.forEach(id => {
-            document.getElementById(id).classList.remove('active');
-        });
-        
-        if (currentStep < steps.length) {
-            document.getElementById(steps[currentStep]).classList.add('active');
-            currentStep++;
-        } else {
-            clearInterval(interval);
+        function hideLoadingScreen() {
+            document.getElementById('loadingScreen').style.display = 'none';
         }
-    }, 800);
-}
-    </script>
-</body>
-</html>
+
+        function showResultsPage() {
+            document.getElementById('searchPage').style.display = 'none';
+            document.getElementById('loadingScreen').style.display = 'none';
+            document.getElementById('results
