@@ -53,7 +53,6 @@ const LONDON_LOCATIONS_DATABASE = {
   
   // Common name variations and aliases
   aliases: {
-    'king\\'s cross': 'kings cross',
     'king cross': 'kings cross',
     'kcx': 'kings cross',
     'tottenham court rd': 'tottenham court road',
