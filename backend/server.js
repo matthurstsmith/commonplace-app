@@ -1220,7 +1220,7 @@ async function analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meet
   try {
     console.log(`Analyzing journey integration for ${area.name}...`);
     
-    // Get journey details for both routes
+    // Get enhanced journey details for both routes
     const [journey1Details, journey2Details] = await Promise.all([
       getJourneyDetailsWithIntegration(coords1, area.coordinates, meetingTime),
       getJourneyDetailsWithIntegration(coords2, area.coordinates, meetingTime)
@@ -1235,7 +1235,7 @@ async function analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meet
       journey2: journey2Details,
       timeDifference: Math.abs(journey1Details.duration - journey2Details.duration),
       averageTime: (journey1Details.duration + journey2Details.duration) / 2,
-      // Integration data for frontend
+      // Enhanced integration data with better naming
       integrationData: {
         area: area,
         journey1: {
@@ -1243,8 +1243,19 @@ async function analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meet
           endCoords: area.coordinates,
           startName: journey1Details.startLocationName,
           endName: area.name,
-          googleMapsUrl: generateGoogleMapsUrl(coords1, area.coordinates, journey1Details.startLocationName, area.name),
-          citymapperUrl: generateCitymapperUrl(coords1, area.coordinates, journey1Details.startLocationName, area.name),
+          // Enhanced URL generation with proper station names
+          googleMapsUrl: generateGoogleMapsUrl(
+            coords1, 
+            area.coordinates, 
+            journey1Details.startLocationName, 
+            area.name
+          ),
+          citymapperUrl: generateCitymapperUrl(
+            coords1, 
+            area.coordinates, 
+            journey1Details.startLocationName, 
+            area.name
+          ),
           tflJourneyData: journey1Details.tflData
         },
         journey2: {
@@ -1252,8 +1263,19 @@ async function analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meet
           endCoords: area.coordinates,
           startName: journey2Details.startLocationName,
           endName: area.name,
-          googleMapsUrl: generateGoogleMapsUrl(coords2, area.coordinates, journey2Details.startLocationName, area.name),
-          citymapperUrl: generateCitymapperUrl(coords2, area.coordinates, journey2Details.startLocationName, area.name),
+          // Enhanced URL generation with proper station names
+          googleMapsUrl: generateGoogleMapsUrl(
+            coords2, 
+            area.coordinates, 
+            journey2Details.startLocationName, 
+            area.name
+          ),
+          citymapperUrl: generateCitymapperUrl(
+            coords2, 
+            area.coordinates, 
+            journey2Details.startLocationName, 
+            area.name
+          ),
           tflJourneyData: journey2Details.tflData
         }
       }
@@ -1289,14 +1311,37 @@ async function getJourneyDetailsWithIntegration(fromCoords, toCoords, meetingTim
 }
 
 function generateGoogleMapsUrl(fromCoords, toCoords, fromName, toName) {
-  // Use the format that actually works with Google Maps
-  const origin = fromName ? encodeURIComponent(fromName) : `${fromCoords[1]},${fromCoords[0]}`;
-  const destination = toName ? encodeURIComponent(toName) : `${toCoords[1]},${toCoords[0]}`;
+  // Use resolved location names when available, with station context
+  let origin = fromName;
+  let destination = toName;
   
-  // Simple, reliable Google Maps directions URL
-  return `https://www.google.com/maps/dir/${origin}/${destination}`;
+  // Enhance names with station context if they're transport hubs
+  if (LONDON_LOCATIONS_DATABASE.stations[fromName?.toLowerCase()]) {
+    origin = `${fromName} Station, London`;
+  } else if (LONDON_LOCATIONS_DATABASE.areas[fromName?.toLowerCase()]?.type === 'transport') {
+    origin = `${fromName} Station, London`;
+  }
+  
+  if (LONDON_LOCATIONS_DATABASE.stations[toName?.toLowerCase()]) {
+    destination = `${toName} Station, London`;
+  } else if (LONDON_LOCATIONS_DATABASE.areas[toName?.toLowerCase()]?.type === 'transport') {
+    destination = `${toName} Station, London`;
+  }
+  
+  // Fallback to coordinates if names aren't available
+  if (!origin || origin === 'undefined') {
+    origin = `${fromCoords[1]},${fromCoords[0]}`;
+  }
+  if (!destination || destination === 'undefined') {
+    destination = `${toCoords[1]},${toCoords[0]}`;
+  }
+  
+  // Create clean, working Google Maps URL
+  const encodedOrigin = encodeURIComponent(origin);
+  const encodedDestination = encodeURIComponent(destination);
+  
+  return `https://www.google.com/maps/dir/${encodedOrigin}/${encodedDestination}`;
 }
-
 function generateCitymapperUrl(fromCoords, toCoords, fromName, toName) {
   const baseUrl = 'https://citymapper.com/directions';
   
