@@ -230,72 +230,113 @@ app.get('/api/locations/suggestions', async (req, res) => {
 });
 
 // Main search endpoint - FIXED VERSION
-app.post('/api/search/meeting-spots', searchLimiter, async (req, res) => {
+app.post('/api/search/meeting-spots', async (req, res) => {
+  console.log('\n=== NEW SEARCH REQUEST ===');
+  console.log('Request body:', req.body);
+
   try {
-    const { location1, location2, venueTypes = [], meetingTime } = req.body;
+    const { location1, location2, venueTypes = [] } = req.body;
 
-    console.log('=== SEARCH REQUEST START ===');
-    console.log('Search request received:', { location1, location2, venueTypes, meetingTime });
-    
     if (!location1 || !location2) {
-      return res.status(400).json({ error: 'Both locations are required' });
+      return res.status(400).json({
+        success: false,
+        error: 'Both location1 and location2 are required'
+      });
     }
 
-    if (!API_CONFIG.MAPBOX_TOKEN || !API_CONFIG.TFL_API_KEY) {
-      return res.status(500).json({ error: 'API keys not configured' });
+    console.log('Step 1: Resolving input locations...');
+    console.log(`Input: "${location1}" and "${location2}"`);
+
+    // ENHANCED: Resolve both locations to precise coordinates
+    const [resolvedLocation1, resolvedLocation2] = await Promise.all([
+      resolveLocationToCoordinates(location1),
+      resolveLocationToCoordinates(location2)
+    ]);
+
+    console.log('Step 2: Location resolution results:');
+    console.log(`Location 1: "${location1}" -> ${resolvedLocation1.name} at [${resolvedLocation1.coordinates}] (${resolvedLocation1.confidence} confidence)`);
+    console.log(`Location 2: "${location2}" -> ${resolvedLocation2.name} at [${resolvedLocation2.coordinates}] (${resolvedLocation2.confidence} confidence)`);
+
+    // Validate that coordinates are in London
+    if (!isInLondon(resolvedLocation1.coordinates) || !isInLondon(resolvedLocation2.coordinates)) {
+      throw new Error('One or both locations are outside London area');
     }
 
-    console.log(`Finding meeting spots between ${location1} and ${location2}`);
+    console.log('Step 3: Running algorithm with resolved coordinates...');
     
-    // Step 1: Geocode locations - FIXED: Actually call the geocoding function
-    console.log('Step 1: Geocoding location1:', location1);
-    const coords1 = typeof location1 === 'string' ? 
-      await geocodeLocation(location1) : location1;
-    console.log('coords1 result:', coords1);
-    
-    console.log('Step 2: Geocoding location2:', location2);
-    const coords2 = typeof location2 === 'string' ? 
-      await geocodeLocation(location2) : location2;
-    console.log('coords2 result:', coords2);
-
-    // Step 3: Run the algorithm
-    console.log('Step 3: Starting algorithm with coordinates:', { coords1, coords2 });
-    const meetingSpots = await findOptimalMeetingSpots(coords1, coords2, meetingTime);
-    
-    // Step 4: Get location names
-    console.log('Step 4: Processing results...');
-    const resultsWithNames = await Promise.all(
-      meetingSpots.map(async (spot, index) => ({
-        ...spot,
-        rank: index + 1,
-        locationName: await getLocationName(spot.coordinates)
-      }))
+    // Run the algorithm with precise coordinates
+    const results = await findOptimalMeetingSpots(
+      resolvedLocation1.coordinates,
+      resolvedLocation2.coordinates,
+      null // meetingTime
     );
 
+    console.log('Step 4: Processing results...');
+    
+    // Add metadata about the resolved locations
+    const enhancedResults = results.map((result, index) => ({
+      ...result,
+      rank: index + 1,
+      // Include resolved location names for better journey planning
+      resolvedLocations: {
+        location1: resolvedLocation1,
+        location2: resolvedLocation2
+      }
+    }));
+
     console.log('Step 5: Sending successful response');
+    console.log(`Found ${enhancedResults.length} meeting spots:`, enhancedResults.map(r => r.name));
+
     res.json({
       success: true,
-      results: resultsWithNames,
+      results: enhancedResults,
       metadata: {
-        searchTime: new Date().toISOString(),
-        location1: coords1,
-        location2: coords2,
-        venueTypes
+        searchLocations: {
+          input1: location1,
+          resolved1: resolvedLocation1.name,
+          input2: location2,
+          resolved2: resolvedLocation2.name
+        },
+        timestamp: new Date().toISOString()
       }
     });
 
   } catch (error) {
-    console.error('=== SEARCH ERROR ===');
-    console.error('Error name:', error.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
+    console.error('Search error:', error);
     
-    res.status(500).json({ 
-      error: 'Failed to find meeting spots',
-      details: error.message 
+    // Provide specific error messages for common issues
+    let errorMessage = error.message;
+    if (error.message.includes('Could not find location')) {
+      errorMessage = `Could not find one of the locations. Please try being more specific (e.g., "Acton Central" instead of "Acton" or include postcode).`;
+    } else if (error.message.includes('outside London')) {
+      errorMessage = 'Please enter locations within the London area.';
+    }
+
+    res.status(500).json({
+      success: false,
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
+
+// ADD this helper function to validate London boundaries
+function isInLondon(coordinates) {
+  const [lng, lat] = coordinates;
+  
+  // Greater London bounds with some tolerance
+  const londonBounds = {
+    minLat: 51.28,   // South London
+    maxLat: 51.70,   // North London  
+    minLng: -0.51,   // West London
+    maxLng: 0.33     // East London
+  };
+  
+  return lat >= londonBounds.minLat && 
+         lat <= londonBounds.maxLat &&
+         lng >= londonBounds.minLng && 
+         lng <= londonBounds.maxLng;
+}
 
 // FIXED: Move geocodeLocation function outside the endpoint where it belongs
 async function geocodeLocation(locationName) {
