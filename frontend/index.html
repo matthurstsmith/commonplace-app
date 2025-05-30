@@ -783,40 +783,105 @@
         }
 
         function setupAutocompleteForInput(input, suggestionsDiv) {
-            let timeout;
-            
-            input.addEventListener('input', async function() {
-                clearTimeout(timeout);
-                const query = this.value.trim();
-                
-                if (query.length < 2) {
-                    suggestionsDiv.classList.remove('active');
-                    return;
-                }
-
-                timeout = setTimeout(async () => {
-                    try {
-                        console.log('Getting London-specific suggestions for:', query);
-                        const response = await fetch(`${API_BASE_URL}/locations/suggestions?q=${encodeURIComponent(query)}`);
-                        const data = await response.json();
-                        
-                        const londonResults = filterLondonResults(data.suggestions || []);
-                        displaySuggestions(londonResults, suggestionsDiv, input);
-                    } catch (error) {
-                        console.error('Suggestions error:', error);
-                        suggestionsDiv.classList.remove('active');
-                    }
-                }, 300);
-            });
-
-            // Hide suggestions when clicking outside
-            document.addEventListener('click', function(e) {
-                if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
-                    suggestionsDiv.classList.remove('active');
-                }
-            });
+    let timeout;
+    
+    input.addEventListener('input', async function() {
+        clearTimeout(timeout);
+        const query = this.value.trim();
+        
+        if (query.length < 2) {
+            suggestionsDiv.classList.remove('active');
+            return;
         }
 
+        timeout = setTimeout(async () => {
+            try {
+                console.log('Getting enhanced suggestions for:', query);
+                
+                // Get suggestions from enhanced backend
+                const response = await fetch(`${API_BASE_URL}/locations/enhanced-suggestions?q=${encodeURIComponent(query)}`);
+                
+                if (!response.ok) {
+                    console.warn('Enhanced suggestions failed, using fallback');
+                    const fallbackSuggestions = generateLocalSuggestions(query);
+                    displaySuggestions(fallbackSuggestions, suggestionsDiv, input);
+                    return;
+                }
+                
+                const data = await response.json();
+                console.log('Enhanced suggestions response:', data);
+                
+                const suggestions = data.suggestions || [];
+                displaySuggestions(suggestions, suggestionsDiv, input);
+                
+            } catch (error) {
+                console.error('Suggestions error:', error);
+                
+                // Fallback to local suggestions
+                const fallbackSuggestions = generateLocalSuggestions(query);
+                displaySuggestions(fallbackSuggestions, suggestionsDiv, input);
+            }
+        }, 300);
+    });
+
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+            suggestionsDiv.classList.remove('active');
+        }
+    });
+}
+
+// ADD this function to generate local suggestions as fallback
+function generateLocalSuggestions(query) {
+    const normalizedQuery = query.toLowerCase();
+    
+    // Common London locations for fallback
+    const commonLocations = [
+        { name: 'Acton', type: 'area' },
+        { name: 'Angel', type: 'station' },
+        { name: 'Bank', type: 'station' },
+        { name: 'Bond Street', type: 'station' },
+        { name: 'Borough Market', type: 'market' },
+        { name: 'Camden', type: 'area' },
+        { name: 'Canary Wharf', type: 'business' },
+        { name: 'Clapham', type: 'area' },
+        { name: 'Covent Garden', type: 'area' },
+        { name: 'Greenwich', type: 'area' },
+        { name: 'Hammersmith', type: 'area' },
+        { name: 'Islington', type: 'area' },
+        { name: 'King\\'s Cross', type: 'station' },
+        { name: 'Liverpool Street', type: 'station' },
+        { name: 'London Bridge', type: 'station' },
+        { name: 'Notting Hill', type: 'area' },
+        { name: 'Oxford Circus', type: 'station' },
+        { name: 'Paddington', type: 'station' },
+        { name: 'Shoreditch', type: 'area' },
+        { name: 'Tottenham Court Road', type: 'station' },
+        { name: 'Victoria', type: 'station' },
+        { name: 'Waterloo', type: 'station' },
+        { name: 'Westminster', type: 'station' }
+    ];
+    
+    // Filter and score matches
+    const matches = commonLocations
+        .filter(location => {
+            const name = location.name.toLowerCase();
+            return name.includes(normalizedQuery) || 
+                   normalizedQuery.split(' ').some(word => 
+                       word.length > 2 && name.includes(word)
+                   );
+        })
+        .map(location => ({
+            name: location.name,
+            description: `${location.name} (${location.type})`,
+            coordinates: [0, 0], // Will be resolved on backend
+            source: 'local'
+        }))
+        .slice(0, 5);
+    
+    return matches;
+}
         function filterLondonResults(suggestions) {
             return suggestions.filter(suggestion => {
                 const name = suggestion.name.toLowerCase();
@@ -844,25 +909,30 @@
         }
 
         function displaySuggestions(suggestions, suggestionsDiv, input) {
-            if (suggestions.length === 0) {
-                suggestionsDiv.classList.remove('active');
-                return;
+    if (suggestions.length === 0) {
+        suggestionsDiv.classList.remove('active');
+        return;
+    }
+
+    suggestionsDiv.innerHTML = suggestions.map(suggestion => {
+        const displayName = suggestion.description || suggestion.name;
+        const subtitle = suggestion.type ? ` (${suggestion.type})` : '';
+        
+        return `<div class="suggestion-item" data-name="${suggestion.name}" data-coords="${(suggestion.coordinates || []).join(',')}">${displayName}${subtitle}</div>`;
+    }).join('');
+
+    suggestionsDiv.classList.add('active');
+
+    suggestionsDiv.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('click', function() {
+            input.value = this.dataset.name;
+            if (this.dataset.coords && this.dataset.coords !== ',') {
+                input.dataset.coordinates = this.dataset.coords;
             }
-
-            suggestionsDiv.innerHTML = suggestions.map(suggestion => 
-                `<div class="suggestion-item" data-name="${suggestion.name}" data-coords="${suggestion.coordinates.join(',')}">${suggestion.name}</div>`
-            ).join('');
-
-            suggestionsDiv.classList.add('active');
-
-            suggestionsDiv.querySelectorAll('.suggestion-item').forEach(item => {
-                item.addEventListener('click', function() {
-                    input.value = this.dataset.name;
-                    input.dataset.coordinates = this.dataset.coords;
-                    suggestionsDiv.classList.remove('active');
-                });
-            });
-        }
+            suggestionsDiv.classList.remove('active');
+        });
+    });
+}
 
         async function handleFindLocations() {
             const location1 = document.getElementById('location1');
