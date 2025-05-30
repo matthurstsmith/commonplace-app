@@ -8,6 +8,67 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
+const LONDON_LOCATIONS_DATABASE = {
+  // Major areas and their precise coordinates
+  areas: {
+    'acton': { coords: [-0.2674, 51.5089], type: 'area', station: 'Acton Central' },
+    'angel': { coords: [-0.1057, 51.5322], type: 'area', station: 'Angel' },
+    'borough market': { coords: [-0.0900, 51.5055], type: 'market', station: 'London Bridge' },
+    'camden': { coords: [-0.1426, 51.5390], type: 'area', station: 'Camden Town' },
+    'canary wharf': { coords: [-0.0235, 51.5054], type: 'business', station: 'Canary Wharf' },
+    'clapham': { coords: [-0.1376, 51.4618], type: 'area', station: 'Clapham Junction' },
+    'clerkenwell': { coords: [-0.1102, 51.5217], type: 'area', station: 'Farringdon' },
+    'covent garden': { coords: [-0.1243, 51.5118], type: 'area', station: 'Covent Garden' },
+    'greenwich': { coords: [-0.0088, 51.4825], type: 'area', station: 'Greenwich' },
+    'hackney': { coords: [-0.0553, 51.5448], type: 'area', station: 'Hackney Central' },
+    'hammersmith': { coords: [-0.2239, 51.4916], type: 'area', station: 'Hammersmith' },
+    'islington': { coords: [-0.1031, 51.5362], type: 'area', station: 'Highbury & Islington' },
+    'kensington': { coords: [-0.1938, 51.4988], type: 'area', station: 'High Street Kensington' },
+    'notting hill': { coords: [-0.2058, 51.5090], type: 'area', station: 'Notting Hill Gate' },
+    'shoreditch': { coords: [-0.0778, 51.5227], type: 'area', station: 'Old Street' },
+    'soho': { coords: [-0.1317, 51.5142], type: 'area', station: 'Tottenham Court Road' },
+    'victoria': { coords: [-0.1448, 51.4952], type: 'transport', station: 'Victoria' },
+    'waterloo': { coords: [-0.1133, 51.5036], type: 'transport', station: 'Waterloo' },
+    'westminster': { coords: [-0.1276, 51.4994], type: 'area', station: 'Westminster' }
+  },
+  
+  // Major stations with precise coordinates
+  stations: {
+    'baker street': [-0.1574, 51.5226],
+    'bank': [-0.0886, 51.5133],
+    'bond street': [-0.1490, 51.5142],
+    'canary wharf': [-0.0235, 51.5054],
+    'euston': [-0.1335, 51.5282],
+    'kings cross': [-0.1240, 51.5308],
+    'liverpool street': [-0.0817, 51.5176],
+    'london bridge': [-0.0864, 51.5049],
+    'oxford circus': [-0.1415, 51.5154],
+    'paddington': [-0.1759, 51.5154],
+    'piccadilly circus': [-0.1347, 51.5098],
+    'tottenham court road': [-0.1308, 51.5165],
+    'victoria': [-0.1448, 51.4952],
+    'waterloo': [-0.1133, 51.5036],
+    'westminster': [-0.1276, 51.4994]
+  },
+  
+  // Common name variations and aliases
+  aliases: {
+    'king\\'s cross': 'kings cross',
+    'king cross': 'kings cross',
+    'kcx': 'kings cross',
+    'tottenham court rd': 'tottenham court road',
+    'tcr': 'tottenham court road',
+    'oxford st': 'oxford circus',
+    'bond st': 'bond street',
+    'piccadilly': 'piccadilly circus',
+    'vic': 'victoria',
+    'waterloo station': 'waterloo',
+    'london bridge station': 'london bridge',
+    'borough': 'borough market',
+    'the borough': 'borough market'
+  }
+};
+
 // Mock Redis - always works, no external dependencies
 const redis = {
   get: () => Promise.resolve(null),
@@ -290,18 +351,16 @@ async function geocodeLocation(locationName) {
 // Algorithm implementation
 // REPLACE the existing findOptimalMeetingSpots function with this:
 async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
-  console.log('Starting area-based algorithm for coordinates:', { coords1, coords2 });
+  console.log('Starting enhanced algorithm with precise location resolution...');
   
-  if (!coords1 || !coords2) {
-    throw new Error('Invalid coordinates provided to algorithm');
-  }
-  
+  // Validate coordinates are actually coordinates, not location names
   if (!Array.isArray(coords1) || !Array.isArray(coords2)) {
-    throw new Error('Coordinates must be arrays [lng, lat]');
+    throw new Error('Algorithm requires coordinate arrays, not location names');
   }
   
-  console.log('Starting isochrone algorithm...');
+  console.log('Using coordinates:', { coords1, coords2 });
   
+  // Continue with existing algorithm...
   const timeIntervals = [20, 30, 45, 60];
   let accessibleAreas = new Set();
 
@@ -314,7 +373,6 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
         getIsochrone(coords2, timeMinutes)
       ]);
 
-      // Find which predefined areas fall within both isochrones
       const mutuallyAccessible = LONDON_MEETING_AREAS.filter(area => {
         const point = area.coordinates;
         return isPointInPolygon(point, isochrone1.geometry.coordinates[0]) &&
@@ -327,10 +385,7 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
 
       console.log(`Found ${mutuallyAccessible.length} mutually accessible areas within ${timeMinutes} minutes`);
       
-      if (accessibleAreas.size >= 15) {
-        console.log('Sufficient accessible areas found');
-        break;
-      }
+      if (accessibleAreas.size >= 15) break;
       
     } catch (error) {
       console.error(`Error checking ${timeMinutes}-minute accessibility:`, error);
@@ -394,6 +449,7 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
   console.log(`Final diverse areas selected:`, diverseResults.map(a => a.name));
   return diverseResults;
 }
+
 async function getIsochrone(coordinates, timeMinutes) {
   console.log(`Getting ${timeMinutes}-minute isochrone for:`, coordinates);
   const fetch = (await import('node-fetch')).default;
@@ -812,58 +868,293 @@ function getDistance(coord1, coord2) {
 }
 
 async function getLocationName(coordinates) {
+  const cacheKey = `${coordinates[0].toFixed(4)},${coordinates[1].toFixed(4)}`;
+  
+  if (locationNameCache.has(cacheKey)) {
+    return locationNameCache.get(cacheKey);
+  }
+
   try {
     const fetch = (await import('node-fetch')).default;
+    
+    // First try to match against our London database
+    const knownLocation = findKnownLondonLocation(coordinates);
+    if (knownLocation) {
+      locationNameCache.set(cacheKey, knownLocation);
+      return knownLocation;
+    }
+    
+    // Fallback to Mapbox with London-specific parameters
     const response = await fetch(
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${coordinates[0]},${coordinates[1]}.json?` +
       `access_token=${API_CONFIG.MAPBOX_TOKEN}&` +
-      `types=poi,address,neighborhood,place&` +
-      `limit=3`
+      `types=poi,address,neighborhood,place,postcode&` +
+      `country=GB&` +
+      `proximity=${coordinates[0]},${coordinates[1]}&` +
+      `limit=5`
     );
 
     if (!response.ok) {
-      return `Location ${coordinates[1].toFixed(4)}, ${coordinates[0].toFixed(4)}`;
+      const fallbackName = await generateFallbackLocationName(coordinates);
+      locationNameCache.set(cacheKey, fallbackName);
+      return fallbackName;
     }
 
     const data = await response.json();
     
     if (data.features && data.features.length > 0) {
-      // Try to get the most specific location first
-      const poi = data.features.find(f => f.place_type.includes('poi'));
-      const address = data.features.find(f => f.place_type.includes('address'));
-      const neighborhood = data.features.find(f => f.place_type.includes('neighborhood'));
+      // Prioritize transport hubs and well-known locations
+      const bestFeature = selectBestLocationFeature(data.features);
+      let name = cleanLocationName(bestFeature.text || bestFeature.place_name);
       
-      // Prefer POI, then address, then neighborhood
-      const feature = poi || address || neighborhood || data.features[0];
-      
-      let name = feature.text || feature.place_name;
-      
-      // If it's just "Victoria" or similar, make it more specific
-      if (name.length < 8 || name === 'Victoria') {
-        // Add nearby street or area information
-        const context = feature.context || [];
-        const street = context.find(c => c.id.includes('address') || c.id.includes('street'));
-        const area = context.find(c => c.id.includes('neighborhood') || c.id.includes('place'));
-        
-        if (street && street.text !== name) {
-          name = `${name} (${street.text})`;
-        } else if (area && area.text !== name && !area.text.includes('London')) {
-          name = `${name} (${area.text})`;
-        } else {
-          // Add coordinates to make it unique
-          name = `${name} Area (${coordinates[1].toFixed(3)}, ${coordinates[0].toFixed(3)})`;
-        }
-      }
-      
+      locationNameCache.set(cacheKey, name);
       return name;
     }
     
-    return `Meeting Point ${coordinates[1].toFixed(3)}, ${coordinates[0].toFixed(3)}`;
+    const fallbackName = await generateFallbackLocationName(coordinates);
+    locationNameCache.set(cacheKey, fallbackName);
+    return fallbackName;
     
   } catch (error) {
-    console.warn('Reverse geocoding failed:', error);
-    return `Meeting Point ${coordinates[1].toFixed(3)}, ${coordinates[0].toFixed(3)}`;
+    console.warn('Enhanced geocoding failed:', error);
+    const fallbackName = await generateFallbackLocationName(coordinates);
+    locationNameCache.set(cacheKey, fallbackName);
+    return fallbackName;
   }
+}
+
+async function resolveLocationToCoordinates(locationInput) {
+  console.log(`Resolving location: "${locationInput}"`);
+  
+  const normalizedInput = locationInput.toLowerCase().trim();
+  
+  // 1. Check direct station matches
+  if (LONDON_LOCATIONS_DATABASE.stations[normalizedInput]) {
+    const coords = LONDON_LOCATIONS_DATABASE.stations[normalizedInput];
+    console.log(`✅ Found station: ${locationInput} -> ${coords}`);
+    return {
+      coordinates: coords,
+      name: toTitleCase(normalizedInput),
+      type: 'station',
+      confidence: 'high'
+    };
+  }
+  
+  // 2. Check area matches
+  if (LONDON_LOCATIONS_DATABASE.areas[normalizedInput]) {
+    const area = LONDON_LOCATIONS_DATABASE.areas[normalizedInput];
+    console.log(`✅ Found area: ${locationInput} -> ${area.coords}`);
+    return {
+      coordinates: area.coords,
+      name: toTitleCase(normalizedInput),
+      type: area.type,
+      confidence: 'high'
+    };
+  }
+  
+  // 3. Check aliases
+  if (LONDON_LOCATIONS_DATABASE.aliases[normalizedInput]) {
+    const aliasTarget = LONDON_LOCATIONS_DATABASE.aliases[normalizedInput];
+    return await resolveLocationToCoordinates(aliasTarget);
+  }
+  
+  // 4. Partial matching for common variations
+  const partialMatch = findPartialMatch(normalizedInput);
+  if (partialMatch) {
+    console.log(`✅ Found partial match: ${locationInput} -> ${partialMatch}`);
+    return await resolveLocationToCoordinates(partialMatch);
+  }
+  
+  // 5. Fallback to Mapbox with London-focused parameters
+  console.log(`🔍 Using Mapbox geocoding for: ${locationInput}`);
+  return await geocodeWithMapbox(locationInput);
+}
+
+function findKnownLondonLocation(coordinates) {
+  const [lng, lat] = coordinates;
+  const threshold = 0.008; // ~800m tolerance
+  
+  // Check stations first
+  for (const [name, [sLng, sLat]] of Object.entries(LONDON_LOCATIONS_DATABASE.stations)) {
+    if (Math.abs(lng - sLng) < threshold && Math.abs(lat - sLat) < threshold) {
+      return toTitleCase(name);
+    }
+  }
+  
+  // Check areas
+  for (const [name, data] of Object.entries(LONDON_LOCATIONS_DATABASE.areas)) {
+    const [aLng, aLat] = data.coords;
+    if (Math.abs(lng - aLng) < threshold && Math.abs(lat - aLat) < threshold) {
+      return toTitleCase(name);
+    }
+  }
+  
+  return null;
+}
+
+function findPartialMatch(input) {
+  const words = input.split(' ');
+  
+  // Try matching with station names
+  for (const stationName of Object.keys(LONDON_LOCATIONS_DATABASE.stations)) {
+    if (stationName.includes(input) || input.includes(stationName)) {
+      return stationName;
+    }
+    
+    // Check if any word matches
+    for (const word of words) {
+      if (word.length > 3 && stationName.includes(word)) {
+        return stationName;
+      }
+    }
+  }
+  
+  // Try matching with area names
+  for (const areaName of Object.keys(LONDON_LOCATIONS_DATABASE.areas)) {
+    if (areaName.includes(input) || input.includes(areaName)) {
+      return areaName;
+    }
+    
+    for (const word of words) {
+      if (word.length > 3 && areaName.includes(word)) {
+        return areaName;
+      }
+    }
+  }
+  
+  return null;
+}
+
+async function geocodeWithMapbox(locationInput) {
+  try {
+    const fetch = (await import('node-fetch')).default;
+    const response = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(locationInput)}.json?` +
+      `access_token=${API_CONFIG.MAPBOX_TOKEN}&` +
+      `country=GB&` +
+      `bbox=-0.51,51.28,0.33,51.70&` + // London bounding box
+      `types=poi,address,neighborhood,place,postcode&` +
+      `limit=5`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Mapbox geocoding failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.features || data.features.length === 0) {
+      throw new Error('No locations found');
+    }
+
+    // Select the best feature (prioritize transport hubs)
+    const bestFeature = selectBestLocationFeature(data.features);
+    
+    return {
+      coordinates: bestFeature.center,
+      name: cleanLocationName(bestFeature.text || bestFeature.place_name),
+      type: 'geocoded',
+      confidence: 'medium',
+      fullData: bestFeature
+    };
+    
+  } catch (error) {
+    console.error('Mapbox geocoding failed:', error);
+    throw new Error(`Could not find location: ${locationInput}`);
+  }
+}
+
+function selectBestLocationFeature(features) {
+  // Prioritize features by type
+  const priorities = {
+    'poi': 10,
+    'address': 8,
+    'neighborhood': 6,
+    'place': 5,
+    'postcode': 3
+  };
+  
+  // Bonus for transport-related terms
+  const transportTerms = ['station', 'tube', 'underground', 'rail', 'bus', 'stop'];
+  
+  let bestFeature = features[0];
+  let bestScore = 0;
+  
+  for (const feature of features) {
+    let score = 0;
+    
+    // Base score from type
+    for (const type of feature.place_type) {
+      score += priorities[type] || 1;
+    }
+    
+    // Transport bonus
+    const text = (feature.text || feature.place_name || '').toLowerCase();
+    for (const term of transportTerms) {
+      if (text.includes(term)) {
+        score += 15;
+        break;
+      }
+    }
+    
+    // Relevance score from Mapbox
+    score += (feature.relevance || 0) * 5;
+    
+    if (score > bestScore) {
+      bestScore = score;
+      bestFeature = feature;
+    }
+  }
+  
+  return bestFeature;
+}
+
+function cleanLocationName(name) {
+  if (!name) return 'Unknown Location';
+  
+  // Remove common suffixes that aren't useful
+  const cleanName = name
+    .replace(/,.*$/, '') // Remove everything after first comma
+    .replace(/\b(Station|Underground|Tube|Rail)\b/gi, '') // Remove transport type words
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
+  
+  return cleanName || name; // Fallback to original if cleaning resulted in empty string
+}
+
+function toTitleCase(str) {
+  return str.replace(/\w\S*/g, (txt) => 
+    txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
+  );
+}
+
+async function generateFallbackLocationName(coordinates) {
+  // Try to find nearest known location
+  const [lng, lat] = coordinates;
+  let nearestLocation = null;
+  let minDistance = Infinity;
+  
+  // Check against known stations and areas
+  const allLocations = {
+    ...LONDON_LOCATIONS_DATABASE.stations,
+    ...Object.fromEntries(
+      Object.entries(LONDON_LOCATIONS_DATABASE.areas).map(([name, data]) => [name, data.coords])
+    )
+  };
+  
+  for (const [name, [nLng, nLat]] of Object.entries(allLocations)) {
+    const distance = Math.sqrt(Math.pow(lng - nLng, 2) + Math.pow(lat - nLat, 2));
+    if (distance < minDistance) {
+      minDistance = distance;
+      nearestLocation = name;
+    }
+  }
+  
+  if (nearestLocation && minDistance < 0.02) { // ~2km
+    return `Near ${toTitleCase(nearestLocation)}`;
+  }
+  
+  return `Location ${lat.toFixed(3)}, ${lng.toFixed(3)}`;
 }
 
 // Error handling
