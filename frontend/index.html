@@ -677,58 +677,75 @@
 
         // Initialize the app
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Commonplace app initialized');
-            
-            initializeEventListeners();
-            setupLocationAutocomplete();
-            
-            // Test API connection in background
-            checkAPIConnection().catch(error => {
-                console.error('API connection test failed, but app will continue:', error);
-            });
-        });
+    console.log('Commonplace app initialized');
+    
+    // Initialize core functionality first
+    initializeEventListeners();
+    setupLocationAutocomplete();
+    
+    // Run API test in background (non-blocking)
+    checkAPIConnection(); // Remove the .catch() since it's now non-blocking
+});
 
         async function checkAPIConnection() {
-            const statusEl = document.getElementById('connectionStatus');
+    const statusEl = document.getElementById('connectionStatus');
+    
+    // Start with a non-blocking message
+    statusEl.textContent = '⚡ Ready to search!';
+    statusEl.className = 'connection-status connected';
+    
+    // Run the actual test in the background (non-blocking)
+    setTimeout(async () => {
+        try {
+            console.log('Background API test starting...');
             
-            try {
-                console.log('Testing API connection to:', API_BASE_URL);
-                
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
-                
-                const response = await fetch(`${API_BASE_URL}/health`, {
-                    signal: controller.signal
-                });
-                
-                clearTimeout(timeoutId);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                
-                const data = await response.json();
-                console.log('API Health Response:', data);
-                
-                if (data.status === 'healthy') {
-                    statusEl.textContent = '✅ Connected to API - Ready to search!';
-                    statusEl.className = 'connection-status connected';
-                } else {
-                    statusEl.textContent = '⚠️ API service is degraded - Try searching anyway';
-                    statusEl.className = 'connection-status error';
-                }
-                
-            } catch (error) {
-                console.error('API connection failed:', error);
-                
-                if (error.name === 'AbortError') {
-                    statusEl.textContent = '⚠️ API test timed out - Try searching anyway';
-                } else {
-                    statusEl.textContent = '⚠️ Could not connect to API - Try searching anyway';
-                }
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000); // Reduced to 3 seconds
+            
+            const response = await fetch(`${API_BASE_URL}/health`, {
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('Background API test successful:', data);
+            
+            // Only update status if there's an issue
+            if (data.status !== 'healthy') {
+                statusEl.textContent = '⚠️ API service degraded - But you can still search!';
                 statusEl.className = 'connection-status error';
+            } else {
+                // Optionally show success briefly then hide
+                statusEl.textContent = '✅ All systems ready!';
+                statusEl.className = 'connection-status connected';
+                
+                // Hide the status after 2 seconds since everything is working
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 2000);
+            }
+            
+        } catch (error) {
+            console.warn('Background API test failed (but app will work):', error);
+            
+            // Only show warning if it's a real connectivity issue
+            if (error.name !== 'AbortError') {
+                statusEl.textContent = '⚠️ API check failed - But you can still try searching!';
+                statusEl.className = 'connection-status error';
+                
+                // Hide warning after 5 seconds to not clutter UI
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 5000);
             }
         }
+    }, 100); // Start background test after 100ms
+}
 
         function initializeEventListeners() {
             // Venue type selection
