@@ -1296,51 +1296,14 @@ async function getLocationName(coordinates) {
   }
 }
 
+// MAIN LOCATION RESOLUTION FUNCTION - Uses the new comprehensive system
 async function resolveLocationToCoordinates(locationInput) {
-  console.log(`Resolving location: "${locationInput}"`);
-  
-  const normalizedInput = locationInput.toLowerCase().trim();
-  
-  // 1. Check direct station matches
-  if (LONDON_LOCATIONS_DATABASE.stations[normalizedInput]) {
-    const coords = LONDON_LOCATIONS_DATABASE.stations[normalizedInput];
-    console.log(`✅ Found station: ${locationInput} -> ${coords}`);
-    return {
-      coordinates: coords,
-      name: toTitleCase(normalizedInput),
-      type: 'station',
-      confidence: 'high'
-    };
+  try {
+    return await londonResolver.resolveLocation(locationInput);
+  } catch (error) {
+    console.error(`Location resolution failed for "${locationInput}":`, error.message);
+    throw error;
   }
-  
-  // 2. Check area matches
-  if (LONDON_LOCATIONS_DATABASE.areas[normalizedInput]) {
-    const area = LONDON_LOCATIONS_DATABASE.areas[normalizedInput];
-    console.log(`✅ Found area: ${locationInput} -> ${area.coords}`);
-    return {
-      coordinates: area.coords,
-      name: toTitleCase(normalizedInput),
-      type: area.type,
-      confidence: 'high'
-    };
-  }
-  
-  // 3. Check aliases
-  if (LONDON_LOCATIONS_DATABASE.aliases[normalizedInput]) {
-    const aliasTarget = LONDON_LOCATIONS_DATABASE.aliases[normalizedInput];
-    return await resolveLocationToCoordinates(aliasTarget);
-  }
-  
-  // 4. Partial matching for common variations
-  const partialMatch = findPartialMatch(normalizedInput);
-  if (partialMatch) {
-    console.log(`✅ Found partial match: ${locationInput} -> ${partialMatch}`);
-    return await resolveLocationToCoordinates(partialMatch);
-  }
-  
-  // 5. Fallback to Mapbox with London-focused parameters
-  console.log(`🔍 Using Mapbox geocoding for: ${locationInput}`);
-  return await geocodeWithMapbox(locationInput);
 }
 
 function findKnownLondonLocation(coordinates) {
