@@ -838,12 +838,15 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null, ori
 async function getIsochrone(coordinates, timeMinutes) {
   console.log(`Getting ${timeMinutes}-minute isochrone for:`, coordinates);
   const fetch = (await import('node-fetch')).default;
-  const response = await fetch(
-    `https://api.mapbox.com/isochrone/v1/mapbox/walking/${coordinates[0]},${coordinates[1]}?` +
-    `contours_minutes=${timeMinutes}&` +
-    `polygons=true&` +
-    `access_token=${API_CONFIG.MAPBOX_TOKEN}`
-  );
+  // Use driving isochrone as a proxy for public transport accessibility in London
+const response = await fetch(
+  `https://api.mapbox.com/isochrone/v1/mapbox/driving/${coordinates[0]},${coordinates[1]}?` +
+  `contours_minutes=${timeMinutes}&` +
+  `polygons=true&` +
+  `access_token=${API_CONFIG.MAPBOX_TOKEN}`
+);
+
+console.log(`Isochrone request for ${timeMinutes} mins from [${coordinates}]: ${response.status}`);
 
   if (!response.ok) {
     throw new Error(`Isochrone API failed: ${response.status}`);
