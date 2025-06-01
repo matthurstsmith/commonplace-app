@@ -1571,15 +1571,18 @@ app.listen(PORT, () => {
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
-async function analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meetingTime = null) {
+async function analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meetingTime = null, originalLocation1 = null, originalLocation2 = null) {
   try {
     console.log(`Analyzing journey integration for ${area.name}...`);
     
-    // Get enhanced journey details for both routes
-    const [journey1Details, journey2Details] = await Promise.all([
-      getJourneyDetailsWithIntegration(coords1, area.coordinates, meetingTime),
-      getJourneyDetailsWithIntegration(coords2, area.coordinates, meetingTime)
-    ]);
+    // Use original location names if provided, otherwise resolve from coordinates
+const location1Name = originalLocation1 || await getLocationName(coords1);
+const location2Name = originalLocation2 || await getLocationName(coords2);
+
+const [journey1Details, journey2Details] = await Promise.all([
+  getJourneyDetailsWithIntegration(coords1, area.coordinates, meetingTime, location1Name),
+  getJourneyDetailsWithIntegration(coords2, area.coordinates, meetingTime, location2Name)
+]);
 
     if (!journey1Details || !journey2Details) {
       return null;
@@ -1596,7 +1599,7 @@ async function analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meet
         journey1: {
           startCoords: coords1,
           endCoords: area.coordinates,
-          startName: journey1Details.startLocationName,
+          startName: location1Name,
           endName: area.name,
           // Enhanced URL generation with proper station names
           googleMapsUrl: generateGoogleMapsUrl(
@@ -1616,7 +1619,7 @@ async function analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meet
         journey2: {
           startCoords: coords2,
           endCoords: area.coordinates,
-          startName: journey2Details.startLocationName,
+          startName: location2Name,
           endName: area.name,
           // Enhanced URL generation with proper station names
           googleMapsUrl: generateGoogleMapsUrl(
