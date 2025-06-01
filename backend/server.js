@@ -593,13 +593,17 @@ app.post('/api/search/meeting-spots', async (req, res) => {
     }
 
     console.log('Step 3: Running algorithm with resolved coordinates...');
-    
-    // Run the algorithm with precise coordinates
-    const results = await findOptimalMeetingSpots(
-      resolvedLocation1.coordinates,
-      resolvedLocation2.coordinates,
-      null // meetingTime
-    );
+console.log(`Coordinates 1: [${resolvedLocation1.coordinates}]`);
+console.log(`Coordinates 2: [${resolvedLocation2.coordinates}]`);
+
+// Run the algorithm with precise coordinates and original location names
+const results = await findOptimalMeetingSpots(
+  resolvedLocation1.coordinates,
+  resolvedLocation2.coordinates,
+  null, // meetingTime
+  location1, // Pass original input
+  location2  // Pass original input
+);
 
     console.log('Step 4: Processing results...');
     
@@ -723,7 +727,7 @@ async function geocodeLocation(locationName) {
 
 // Algorithm implementation
 // REPLACE the existing findOptimalMeetingSpots function with this:
-async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
+async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null, originalLocation1 = null, originalLocation2 = null) {
   console.log('Starting enhanced algorithm with precise location resolution...');
   
   // Validate coordinates are actually coordinates, not location names
@@ -784,7 +788,14 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
   
   for (const area of areaObjects) {
     try {
-      const journeyDetails = await analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meetingTime);
+      const journeyDetails = await analyzeJourneyDetailsWithIntegration(
+  coords1, 
+  coords2, 
+  area, 
+  meetingTime,
+  originalLocation1,
+  originalLocation2
+);
       if (journeyDetails) {
         analyzedAreas.push({
           name: area.name,
