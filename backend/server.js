@@ -453,6 +453,7 @@ class LondonLocationResolver {
 
 // Initialize the resolver
 const londonResolver = new LondonLocationResolver();
+const locationNameCache = new Map();
 
 // Middleware
 app.use(helmet());
