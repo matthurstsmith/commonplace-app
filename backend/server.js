@@ -1646,8 +1646,8 @@ const [journey1Details, journey2Details] = await Promise.all([
   }
 }
 
-async function getJourneyDetailsWithIntegration(fromCoords, toCoords, meetingTime = null) {
-  const startLocationName = await getLocationName(fromCoords);
+async function getJourneyDetailsWithIntegration(fromCoords, toCoords, meetingTime = null, startLocationName = null) {
+  const resolvedStartLocationName = startLocationName || await getLocationName(fromCoords);
   // Get enhanced TfL journey data with line details
   const journey = await getEnhancedJourneyDetails(fromCoords, toCoords, meetingTime);
   
@@ -1660,7 +1660,7 @@ async function getJourneyDetailsWithIntegration(fromCoords, toCoords, meetingTim
     changes: journey.changes,
     route: journey.route,
     modes: journey.modes,
-    startLocationName: startLocationName,
+    startLocationName: resolvedStartLocationName,
     tflData: journey,
     // NEW: Add detailed journey steps for preview
     journeySteps: journey.steps,
