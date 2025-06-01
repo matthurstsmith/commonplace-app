@@ -2395,4 +2395,21 @@ async function fallbackGeographicAnalysis(coords1, coords2, meetingTime) {
   return selectDiverseAreas(scoredAreas, 3);
 }
 
+async function debugLocationResolution(locationInput) {
+  console.log(`\n=== DEBUGGING LOCATION: "${locationInput}" ===`);
+  
+  // Step 1: Resolve to coordinates
+  const resolved = await resolveLocationToCoordinates(locationInput);
+  console.log(`Step 1 - Resolved to:`, resolved);
+  
+  // Step 2: Convert coordinates back to name
+  const locationName = await getLocationName(resolved.coordinates);
+  console.log(`Step 2 - Location name for coordinates:`, locationName);
+  
+  // Step 3: Check what happens in journey planning
+  console.log(`Step 3 - Journey planning will use: "${locationName}" at [${resolved.coordinates}]`);
+  
+  return { resolved, locationName };
+}
+
 module.exports = app;
