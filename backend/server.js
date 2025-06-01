@@ -1933,7 +1933,7 @@ async function getLocationName(coordinates) {
 // MAIN LOCATION RESOLUTION FUNCTION - Uses the new comprehensive system
 async function resolveLocationToCoordinates(locationInput) {
   try {
-    return await londonResolver.resolveLocation(locationInput);
+    return await enhancedLondonResolver.resolveLocation(locationInput);
   } catch (error) {
     console.error(`Location resolution failed for "${locationInput}":`, error.message);
     throw error;
