@@ -458,16 +458,19 @@ const locationNameCache = new Map();
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: [
-    'https://commonplace-app-ten.vercel.app',
-    'https://commonplace-48ym45np0-matthurstsmith-gmailcoms-projects.vercel.app',
-    'http://localhost:3000',
-    '*'
-  ],
+  origin: true, // Allow all origins
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Access-Control-Allow-Origin'],
+  optionsSuccessStatus: 200
 }));
+// Additional CORS handling for preflight requests
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.sendStatus(200);
+});
 app.use(express.json({ limit: '10mb' }));
 
 // Rate limiting
