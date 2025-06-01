@@ -676,76 +676,141 @@
         let selectedVenueTypes = [];
 
         // Initialize the app
-        document.addEventListener('DOMContentLoaded', function() {
+      document.addEventListener('DOMContentLoaded', function() {
     console.log('Commonplace app initialized');
     
-    // Initialize core functionality first
+    // Initialize core functionality immediately
     initializeEventListeners();
     setupLocationAutocomplete();
     
-    // Run API test in background (non-blocking)
-    checkAPIConnection(); // Remove the .catch() since it's now non-blocking
+    // Initialize smart API monitoring in background
+    apiHealth.initialize();
 });
 
-        async function checkAPIConnection() {
-    const statusEl = document.getElementById('connectionStatus');
-    
-    // Start with a non-blocking message
-    statusEl.textContent = '⚡ Ready to search!';
-    statusEl.className = 'connection-status connected';
-    
-    // Run the actual test in the background (non-blocking)
-    setTimeout(async () => {
+
+class APIHealthManager {
+    constructor() {
+        this.isHealthy = null; // null = unknown, true = healthy, false = unhealthy
+        this.lastCheck = null;
+        this.checkInterval = null;
+        this.isDevelopment = window.location.hostname === 'localhost' || window.location.hostname.includes('vercel');
+    }
+
+    async initialize() {
+        // Only show status in development or if there are known issues
+        const statusEl = document.getElementById('connectionStatus');
+        
+        if (!this.isDevelopment) {
+            // In production, hide the status by default
+            statusEl.style.display = 'none';
+        }
+
+        // Start smart background monitoring
+        this.startSmartMonitoring();
+    }
+
+    async startSmartMonitoring() {
+        // Do one quick check immediately (with short timeout)
+        await this.quickHealthCheck();
+        
+        // Set up periodic monitoring every 30 seconds
+        this.checkInterval = setInterval(() => {
+            this.quickHealthCheck();
+        }, 30000);
+    }
+
+    async quickHealthCheck() {
         try {
-            console.log('Background API test starting...');
-            
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3000); // Reduced to 3 seconds
+            const timeoutId = setTimeout(() => controller.abort(), 2000); // Very fast timeout
             
+            const startTime = Date.now();
             const response = await fetch(`${API_BASE_URL}/health`, {
                 signal: controller.signal
             });
             
             clearTimeout(timeoutId);
+            const responseTime = Date.now() - startTime;
             
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const data = await response.json();
-            console.log('Background API test successful:', data);
-            
-            // Only update status if there's an issue
-            if (data.status !== 'healthy') {
-                statusEl.textContent = '⚠️ API service degraded - But you can still search!';
-                statusEl.className = 'connection-status error';
+            if (response.ok) {
+                const data = await response.json();
+                this.handleHealthyAPI(responseTime);
             } else {
-                // Optionally show success briefly then hide
-                statusEl.textContent = '✅ All systems ready!';
-                statusEl.className = 'connection-status connected';
-                
-                // Hide the status after 2 seconds since everything is working
-                setTimeout(() => {
-                    statusEl.style.display = 'none';
-                }, 2000);
+                this.handleUnhealthyAPI(`HTTP ${response.status}`);
             }
             
         } catch (error) {
-            console.warn('Background API test failed (but app will work):', error);
-            
-            // Only show warning if it's a real connectivity issue
             if (error.name !== 'AbortError') {
-                statusEl.textContent = '⚠️ API check failed - But you can still try searching!';
-                statusEl.className = 'connection-status error';
-                
-                // Hide warning after 5 seconds to not clutter UI
-                setTimeout(() => {
-                    statusEl.style.display = 'none';
-                }, 5000);
+                this.handleUnhealthyAPI(error.message);
             }
         }
-    }, 100); // Start background test after 100ms
+        
+        this.lastCheck = Date.now();
+    }
+
+    handleHealthyAPI(responseTime) {
+        const wasUnhealthy = this.isHealthy === false;
+        this.isHealthy = true;
+        
+        if (this.isDevelopment) {
+            console.log(`✅ API healthy (${responseTime}ms)`);
+        }
+        
+        // If it was unhealthy and now it's healthy, briefly show success
+        if (wasUnhealthy) {
+            this.showTemporaryStatus('✅ Connection restored!', 'connected', 3000);
+        }
+    }
+
+    handleUnhealthyAPI(reason) {
+        const wasHealthy = this.isHealthy === true;
+        this.isHealthy = false;
+        
+        console.warn('⚠️ API unhealthy:', reason);
+        
+        // Show warning only if API was previously healthy or in development
+        if (wasHealthy || this.isDevelopment) {
+            this.showTemporaryStatus(
+                '⚠️ Connection issue detected - But you can still try searching!', 
+                'error', 
+                8000
+            );
+        }
+    }
+
+    showTemporaryStatus(message, className, duration) {
+        const statusEl = document.getElementById('connectionStatus');
+        statusEl.textContent = message;
+        statusEl.className = `connection-status ${className}`;
+        statusEl.style.display = 'block';
+        
+        setTimeout(() => {
+            statusEl.style.display = 'none';
+        }, duration);
+    }
+
+    // Call this when user tries to search - provides just-in-time feedback
+    async validateBeforeSearch() {
+        // If we haven't checked recently or know it's unhealthy, do a quick check
+        const timeSinceLastCheck = Date.now() - (this.lastCheck || 0);
+        
+        if (timeSinceLastCheck > 60000 || this.isHealthy === false) {
+            await this.quickHealthCheck();
+        }
+        
+        // Return whether we think the API is ready
+        return this.isHealthy !== false; // true or null (unknown) both allow search
+    }
+
+    cleanup() {
+        if (this.checkInterval) {
+            clearInterval(this.checkInterval);
+        }
+    }
 }
+
+// Initialize the smart API manager
+const apiHealth = new APIHealthManager();
 
         function initializeEventListeners() {
             // Venue type selection
@@ -961,38 +1026,44 @@ function generateLocalSuggestions(query) {
             }
 
             try {
-                showLoadingScreen();
-                hideError();
+    // Quick API validation before starting search
+    const apiReady = await apiHealth.validateBeforeSearch();
+    if (!apiReady) {
+        console.warn('API might be unhealthy, but attempting search anyway...');
+    }
 
-                console.log('Searching for meeting spots between:', location1.value, 'and', location2.value);
-                
-                const response = await fetch(`${API_BASE_URL}/search/meeting-spots`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        location1: location1.value,
-                        location2: location2.value,
-                        venueTypes: selectedVenueTypes
-                    })
-                });
+    showLoadingScreen();
+    hideError();
 
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `HTTP ${response.status}`);
-                }
+    console.log('Searching for meeting spots between:', location1.value, 'and', location2.value);
+    
+    const response = await fetch(`${API_BASE_URL}/search/meeting-spots`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            location1: location1.value,
+            location2: location2.value,
+            venueTypes: selectedVenueTypes
+        })
+    });
 
-                const data = await response.json();
-                console.log('Search results:', data);
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+    }
 
-                if (data.success && data.results) {
-                    hideLoadingScreen();
-                    showResultsPage();
-                    displayResults(data.results);
-                } else {
-                    throw new Error('No results returned from API');
-                }
+    const data = await response.json();
+    console.log('Search results:', data);
+
+    if (data.success && data.results) {
+        hideLoadingScreen();
+        showResultsPage();
+        displayResults(data.results);
+    } else {
+        throw new Error('No results returned from API');
+    }
 
             } catch (error) {
                 console.error('Search error:', error);
@@ -1260,6 +1331,10 @@ function generateLocalSuggestions(query) {
 
         console.log('Commonplace frontend loaded successfully');
         console.log('API URL configured:', API_BASE_URL);
+        // Clean up when page unloads
+window.addEventListener('beforeunload', () => {
+    apiHealth.cleanup();
+});
     </script>
 </body>
 </html>
