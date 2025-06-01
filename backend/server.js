@@ -1834,7 +1834,6 @@ function disambiguateLocationName(name, coordinates) {
 }
 
 // Initialize the location name cache if it doesn't exist
-const locationNameCache = new Map();
 async function resolveLocationToCoordinates(locationInput) {
   console.log(`Resolving location: "${locationInput}"`);
   
