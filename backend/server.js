@@ -993,6 +993,12 @@ async function analyzeJourneyDetails(coords1, coords2, meetingPoint, meetingTime
 }
 
 async function getEnhancedJourneyDetails(fromCoords, toCoords, meetingTime = null) {
+  return await getOptimizedJourneyDetails(fromCoords, toCoords, meetingTime);
+}
+
+async function getOptimizedJourneyDetails(fromCoords, toCoords, meetingTime = null) {
+  console.log(`Getting optimized journey from [${fromCoords}] to [${toCoords}]`);
+  
   const now = new Date();
   const hours = now.getHours().toString().padStart(2, '0');
   const minutes = now.getMinutes().toString().padStart(2, '0');
@@ -1001,58 +1007,51 @@ async function getEnhancedJourneyDetails(fromCoords, toCoords, meetingTime = nul
     new Date(meetingTime).getMinutes().toString().padStart(2, '0') :
     hours + minutes;
   
-  // ENHANCED: Include Elizabeth Line and optimize mode selection
   const tflUrl = `https://api.tfl.gov.uk/Journey/JourneyResults/${fromCoords[1]},${fromCoords[0]}/to/${toCoords[1]},${toCoords[0]}?` +
     `mode=tube,bus,national-rail,dlr,overground,elizabeth-line,walking&` +
     `time=${encodeURIComponent(time)}&` +
     `timeIs=Departing&` +
-    `journeyPreference=LeastTime&` + // Optimize for speed
-    `walkingSpeed=Average&` +
-    `cyclePreference=None&` +
+    `journeyPreference=LeastTime&` +
+    `walkingSpeed=Fast&` +
+    `accessibilityPreference=NoRequirements&` +
+    `maxTransferMinutes=5&` +
+    `walkingOptimization=true&` +
     `app_key=${API_CONFIG.TFL_API_KEY}`;
-  
-  console.log('Enhanced TfL API Request:', tflUrl);
   
   try {
     const fetch = (await import('node-fetch')).default;
     const response = await fetch(tflUrl);
 
     if (!response.ok) {
-      console.error('TfL API Error:', response.status);
-      // Try fallback with fewer constraints
-      return await getOptimizedJourneyFallback(fromCoords, toCoords, meetingTime);
+      console.error('Optimized TfL API Error:', response.status);
+      return await getSpeedOptimizedFallback(fromCoords, toCoords, meetingTime);
     }
 
     const data = await response.json();
     
     if (!data.journeys || data.journeys.length === 0) {
-      return await getOptimizedJourneyFallback(fromCoords, toCoords, meetingTime);
+      return await getSpeedOptimizedFallback(fromCoords, toCoords, meetingTime);
     }
 
-    // ENHANCED: Select the fastest journey, not just the first
-    const bestJourney = selectOptimalJourney(data.journeys);
+    const optimizedJourney = selectFastestJourney(data.journeys);
+    const correctedTime = applyGoogleMapsTimeCorrection(optimizedJourney);
     
     return {
-      duration: bestJourney.duration,
-      changes: countJourneyChanges(bestJourney),
-      route: formatJourneyRoute(bestJourney),
-      modes: getJourneyModes(bestJourney),
-      fullData: bestJourney,
-      // Enhanced journey breakdown
-      steps: extractJourneySteps(bestJourney),
-      lines: extractTransportLines(bestJourney),
-      walkingTime: calculateWalkingTime(bestJourney),
-      // NEW: Add optimization indicators
-      optimizationUsed: 'fastest_route',
-      elizabethLineUsed: checkElizabethLineUsage(bestJourney)
+      duration: correctedTime.duration,
+      changes: correctedTime.changes,
+      route: formatJourneyRoute(optimizedJourney),
+      modes: getJourneyModes(optimizedJourney),
+      rawTflTime: optimizedJourney.duration,
+      correctedTime: correctedTime.duration,
+      optimizationApplied: correctedTime.optimizationApplied,
+      confidence: correctedTime.confidence
     };
 
   } catch (error) {
-    console.error('Enhanced TfL journey request failed:', error.message);
-    return await getOptimizedJourneyFallback(fromCoords, toCoords, meetingTime);
+    console.error('Optimized TfL journey request failed:', error.message);
+    return await getSpeedOptimizedFallback(fromCoords, toCoords, meetingTime);
   }
 }
-
 // NEW: Journey optimization functions
 function selectOptimalJourney(journeys) {
   if (journeys.length === 1) return journeys[0];
@@ -2241,38 +2240,141 @@ function generateCitymapperUrl(fromCoords, toCoords, fromName, toName) {
 function calculateAreaConvenienceScore(area) {
   const { journey1, journey2, timeDifference, averageTime, type, zones } = area;
   
+  // NEW WEIGHTS: Heavily prioritize speed
+  const speedWeight = 0.70;      // 70% - absolute travel time matters most
+  const fairnessWeight = 0.15;   // 15% - fairness is secondary
+  const convenienceWeight = 0.10; // 10% - changes matter less
+  const locationWeight = 0.05;   // 5% - location type is minor
+  
+  // SPEED SCORE: Exponential penalty for slow journeys
+  let speedScore = 100;
+  if (averageTime > 20) {
+    speedScore = Math.max(0, 100 - Math.pow((averageTime - 20) / 20, 1.5) * 100);
+  }
+  
+  // FAIRNESS SCORE: More tolerant of time differences
+  const fairnessScore = Math.max(0, 100 - (timeDifference / 15) * 100);
+  
+  // CONVENIENCE SCORE: Less penalty for changes
   const totalChanges = journey1.changes + journey2.changes;
-  const maxZone = Math.max(...zones);
+  const convenienceScore = Math.max(0, 100 - totalChanges * 20);
   
-  // Scoring weights
-  const timeWeight = 0.35;
-  const fairnessWeight = 0.25;
-  const convenienceWeight = 0.25;
-  const locationWeight = 0.15;
-  
-  // Time score (faster is better, penalty after 45 minutes)
-  const timeScore = Math.max(0, (60 - averageTime) / 60 * 100);
-  
-  // Fairness score (smaller difference is better)
-  const fairnessScore = Math.max(0, (20 - timeDifference) / 20 * 100);
-  
-  // Convenience score (fewer changes is better)
-  const convenienceScore = Math.max(0, (4 - totalChanges) / 4 * 100);
-  
-  // Location score (major stations and Zone 1 get bonuses)
-  let locationScore = 50;
-  if (type === 'major_station') locationScore += 30;
-  if (maxZone === 1) locationScore += 20;
-  else if (maxZone === 2) locationScore += 10;
+  // LOCATION SCORE: Minimal impact
+  let locationScore = 60;
+  if (type === 'major_station') locationScore += 15;
+  if (zones.includes(1)) locationScore += 10;
   
   const finalScore = (
-    timeScore * timeWeight +
+    speedScore * speedWeight +
     fairnessScore * fairnessWeight + 
     convenienceScore * convenienceWeight +
     locationScore * locationWeight
   );
   
+  console.log(`Score breakdown for ${area.name}: Speed=${speedScore.toFixed(1)} (${averageTime}min avg), ` +
+             `Fairness=${fairnessScore.toFixed(1)} (${timeDifference}min diff), ` +
+             `Final=${finalScore.toFixed(1)}`);
+  
   return Math.round(finalScore * 10) / 10;
+}
+
+function selectFastestJourney(journeys) {
+  if (journeys.length === 1) return journeys[0];
+  
+  const speedScored = journeys.map(journey => {
+    const changes = countJourneyChanges(journey);
+    const walkingTime = calculateWalkingTime(journey);
+    const elizabethLine = checkElizabethLineUsage(journey);
+    const directRoute = changes === 0;
+    
+    let score = 120 - journey.duration;
+    score += directRoute ? 15 : 0;
+    score += elizabethLine ? 12 : 0;
+    score -= changes * 8;
+    score -= walkingTime * 0.3;
+    
+    return { journey, score, duration: journey.duration };
+  });
+  
+  speedScored.sort((a, b) => b.score - a.score);
+  
+  console.log('Speed-optimized journey selection:', 
+    speedScored.map((s, i) => `${i + 1}: ${s.duration}min (score: ${s.score})`).join(', '));
+  
+  return speedScored[0].journey;
+}
+
+function applyGoogleMapsTimeCorrection(journey) {
+  if (!journey || !journey.legs) {
+    return { duration: 45, changes: 0, optimizationApplied: 'fallback', confidence: 'low' };
+  }
+
+  let correctedDuration = journey.duration;
+  let optimizations = [];
+  
+  const walkingTime = calculateWalkingTime(journey);
+  if (walkingTime > 5) {
+    const walkingReduction = Math.min(walkingTime * 0.25, 8);
+    correctedDuration -= walkingReduction;
+    optimizations.push(`walking_reduction_${Math.round(walkingReduction)}min`);
+  }
+  
+  const changes = countJourneyChanges(journey);
+  if (changes > 0) {
+    const connectionReduction = Math.min(changes * 3, 10);
+    correctedDuration -= connectionReduction;
+    optimizations.push(`connection_reduction_${connectionReduction}min`);
+  }
+  
+  const hasElizabethLine = checkElizabethLineUsage(journey);
+  if (hasElizabethLine) {
+    const elizabethBonus = Math.min(correctedDuration * 0.15, 12);
+    correctedDuration -= elizabethBonus;
+    optimizations.push(`elizabeth_line_bonus_${Math.round(elizabethBonus)}min`);
+  }
+  
+  if (changes === 0) {
+    const directBonus = Math.min(correctedDuration * 0.1, 5);
+    correctedDuration -= directBonus;
+    optimizations.push(`direct_route_bonus_${Math.round(directBonus)}min`);
+  }
+  
+  correctedDuration = Math.max(correctedDuration, 8);
+  
+  console.log(`Time correction: ${journey.duration}min → ${Math.round(correctedDuration)}min (${optimizations.join(', ')})`);
+  
+  return {
+    duration: Math.round(correctedDuration),
+    changes: changes,
+    optimizationApplied: optimizations.join(', '),
+    confidence: optimizations.length > 2 ? 'high' : 'medium'
+  };
+}
+
+async function getSpeedOptimizedFallback(fromCoords, toCoords, meetingTime) {
+  console.log('Using speed-optimized fallback journey estimation...');
+  
+  const distance = getDistance(fromCoords, toCoords);
+  
+  let estimatedTime;
+  if (distance < 2000) {
+    estimatedTime = 15 + (distance / 1000) * 3;
+  } else if (distance < 5000) {
+    estimatedTime = 20 + (distance / 1000) * 4;
+  } else {
+    estimatedTime = 25 + (distance / 1000) * 5;
+  }
+  
+  const estimatedChanges = distance > 3000 ? (distance > 8000 ? 2 : 1) : 0;
+  
+  return {
+    duration: Math.round(estimatedTime),
+    changes: estimatedChanges,
+    route: `Estimated ${Math.round(distance/1000, 1)}km journey`,
+    modes: ['tube', 'walking'],
+    optimizationApplied: 'distance_estimation',
+    confidence: 'low'
+  };
 }
 
 function selectDiverseAreas(scoredAreas, maxResults) {
