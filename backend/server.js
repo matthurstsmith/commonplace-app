@@ -381,21 +381,33 @@ class EnhancedLondonLocationResolver {
 
   // Format TfL station data to our standard format
   formatStationResult(station) {
-    return {
-      coordinates: [parseFloat(station.lon), parseFloat(station.lat)],
-      name: this.cleanStationName(station.commonName),
-      type: 'station',
-      confidence: 'very_high',
-      source: 'tfl_station_api',
-      tflData: {
-        id: station.id,
-        naptanId: station.naptanId,
-        modes: station.modes,
-        zone: station.zone,
-        lines: station.lines
-      }
-    };
+  // Handle missing station data
+  if (!station) {
+    console.error('❌ formatStationResult received null station');
+    return null;
   }
+  
+  const stationName = station.commonName || station.name || 'Unknown Station';
+  const longitude = parseFloat(station.lon || station.longitude || 0);
+  const latitude = parseFloat(station.lat || station.latitude || 0);
+  
+  console.log(`📍 Formatting station: ${stationName} at [${longitude}, ${latitude}]`);
+  
+  return {
+    coordinates: [longitude, latitude],
+    name: this.cleanStationName(stationName),
+    type: 'station',
+    confidence: 'very_high',
+    source: 'tfl_station_api',
+    tflData: {
+      id: station.id || station.naptanId,
+      naptanId: station.naptanId,
+      modes: station.modes || [],
+      zone: station.zone,
+      lines: station.lines || []
+    }
+  };
+}
 
   // Check if station name matches query
   stationNameMatches(stationName, query) {
@@ -527,13 +539,19 @@ class EnhancedLondonLocationResolver {
   }
 
   cleanStationName(name) {
-    return name
-      .replace(/ Station$/, '')
-      .replace(/ Underground Station$/, '')
-      .replace(/ Rail Station$/, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+  // Handle undefined/null names
+  if (!name || typeof name !== 'string') {
+    console.warn('⚠️ cleanStationName received invalid name:', name);
+    return 'Unknown Station';
   }
+  
+  return name
+    .replace(/ Station$/, '')
+    .replace(/ Underground Station$/, '')
+    .replace(/ Rail Station$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
   isInLondonBounds(coordinates) {
     const [lng, lat] = coordinates;
