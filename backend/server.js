@@ -172,6 +172,288 @@ const LONDON_MEETING_AREAS = [
   { name: "Old Street", coordinates: [-0.0878, 51.5259], type: "major_station", zones: [1] },
 ];
 
+// COMPREHENSIVE LONDON LOCATION RESOLUTION SYSTEM
+class LondonLocationResolver {
+  constructor() {
+    this.londonBounds = {
+      strict: { minLat: 51.28, maxLat: 51.70, minLng: -0.51, maxLng: 0.33 }, // Greater London
+      extended: { minLat: 51.20, maxLat: 51.80, minLng: -0.65, maxLng: 0.45 } // London commuter belt
+    };
+    this.postcodeMap = {
+      'SW1': 'westminster', 'SW3': 'kensington and chelsea', 'SW5': 'kensington and chelsea',
+      'SW7': 'kensington and chelsea', 'SW10': 'kensington and chelsea', 'W8': 'kensington and chelsea',
+      'W6': 'hammersmith and fulham', 'W12': 'hammersmith and fulham', 'W14': 'hammersmith and fulham',
+      'TW9': 'richmond', 'TW10': 'richmond', 'SW19': 'wimbledon', 'SE10': 'greenwich',
+      'E14': 'canary wharf', 'SW4': 'clapham', 'SW11': 'clapham', 'N1': 'islington',
+      'E1': 'shoreditch', 'E2': 'shoreditch', 'W11': 'notting hill', 'SE1': 'borough market',
+      'W5': 'ealing', 'CR0': 'croydon', 'BR1': 'bromley', 'KT1': 'kingston', 'KT2': 'kingston'
+    };
+  }
+
+  // MAIN RESOLUTION FUNCTION
+  async resolveLocation(locationInput) {
+    console.log(`\n🔍 RESOLVING LOCATION: "${locationInput}"`);
+    
+    const normalizedInput = this.normalizeInput(locationInput);
+    
+    // STAGE 1: Direct database lookup (highest confidence)
+    const directMatch = this.findDirectMatch(normalizedInput);
+    if (directMatch) {
+      console.log(`✅ DIRECT MATCH: ${directMatch.name} [${directMatch.confidence}]`);
+      return directMatch;
+    }
+    
+    // STAGE 2: Postcode pattern matching
+    const postcodeMatch = this.findPostcodeMatch(normalizedInput);
+    if (postcodeMatch) {
+      console.log(`✅ POSTCODE MATCH: ${postcodeMatch.name} [${postcodeMatch.confidence}]`);
+      return postcodeMatch;
+    }
+    
+    // STAGE 3: Fuzzy matching within London database
+    const fuzzyMatch = this.findFuzzyMatch(normalizedInput);
+    if (fuzzyMatch) {
+      console.log(`✅ FUZZY MATCH: ${fuzzyMatch.name} [${fuzzyMatch.confidence}]`);
+      return fuzzyMatch;
+    }
+    
+    // STAGE 4: London-constrained geocoding
+    const geocodedMatch = await this.findGeocodedMatch(normalizedInput);
+    if (geocodedMatch) {
+      console.log(`✅ GEOCODED MATCH: ${geocodedMatch.name} [${geocodedMatch.confidence}]`);
+      return geocodedMatch;
+    }
+    
+    // STAGE 5: Failure with helpful message
+    console.log(`❌ NO VALID LONDON LOCATION FOUND for "${locationInput}"`);
+    throw new Error(`Could not find "${locationInput}" in London. Please try being more specific (e.g., "Richmond London" or include a postcode).`);
+  }
+
+  normalizeInput(input) {
+    return input.toLowerCase()
+      .trim()
+      .replace(/[^\w\s'-]/g, '') // Remove special chars except apostrophes and hyphens
+      .replace(/\s+/g, ' '); // Normalize whitespace
+  }
+
+  findDirectMatch(normalizedInput) {
+    // Check stations first (highest priority)
+    if (LONDON_LOCATIONS_DATABASE.stations[normalizedInput]) {
+      return {
+        coordinates: LONDON_LOCATIONS_DATABASE.stations[normalizedInput],
+        name: this.toTitleCase(normalizedInput),
+        type: 'station',
+        confidence: 'very_high',
+        source: 'direct_station_match'
+      };
+    }
+    
+    // Check areas
+    if (LONDON_LOCATIONS_DATABASE.areas[normalizedInput]) {
+      const area = LONDON_LOCATIONS_DATABASE.areas[normalizedInput];
+      return {
+        coordinates: area.coords,
+        name: this.toTitleCase(normalizedInput),
+        type: area.type,
+        confidence: 'very_high',
+        source: 'direct_area_match',
+        nearestStation: area.station
+      };
+    }
+    
+    // Check aliases
+    if (LONDON_LOCATIONS_DATABASE.aliases[normalizedInput]) {
+      const aliasTarget = LONDON_LOCATIONS_DATABASE.aliases[normalizedInput];
+      console.log(`🔄 ALIAS REDIRECT: "${normalizedInput}" → "${aliasTarget}"`);
+      return this.findDirectMatch(aliasTarget);
+    }
+    
+    return null;
+  }
+
+  findPostcodeMatch(normalizedInput) {
+    // Extract potential postcode patterns
+    const postcodePattern = /\b([A-Z]{1,2}\d{1,2}[A-Z]?)\b/gi;
+    const matches = normalizedInput.match(postcodePattern);
+    
+    if (matches) {
+      for (const postcode of matches) {
+        const postcodeUpper = postcode.toUpperCase();
+        const shortPostcode = postcodeUpper.replace(/\d[A-Z]{2}$/, ''); // Remove last part (e.g., SW1A → SW1)
+        
+        if (this.postcodeMap[postcodeUpper] || this.postcodeMap[shortPostcode]) {
+          const targetArea = this.postcodeMap[postcodeUpper] || this.postcodeMap[shortPostcode];
+          console.log(`📮 POSTCODE REDIRECT: "${postcodeUpper}" → "${targetArea}"`);
+          return this.findDirectMatch(targetArea);
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  findFuzzyMatch(normalizedInput) {
+    const words = normalizedInput.split(' ');
+    
+    // Try partial matching for multi-word locations
+    const allLocations = [
+      ...Object.keys(LONDON_LOCATIONS_DATABASE.stations),
+      ...Object.keys(LONDON_LOCATIONS_DATABASE.areas),
+      ...Object.keys(LONDON_LOCATIONS_DATABASE.aliases)
+    ];
+    
+    // Look for locations that contain all the input words
+    for (const location of allLocations) {
+      const locationWords = location.split(' ');
+      
+      // Check if all input words are contained in location name
+      const allWordsMatch = words.every(word => 
+        word.length > 2 && locationWords.some(locWord => 
+          locWord.includes(word) || word.includes(locWord)
+        )
+      );
+      
+      if (allWordsMatch && words.length >= 2) {
+        console.log(`🎯 FUZZY MATCH: "${normalizedInput}" → "${location}"`);
+        return this.findDirectMatch(location);
+      }
+    }
+    
+    return null;
+  }
+
+  async findGeocodedMatch(normalizedInput) {
+    if (!API_CONFIG.MAPBOX_TOKEN) {
+      console.log('⚠️ No Mapbox token available for geocoding');
+      return null;
+    }
+    
+    try {
+      console.log(`🌍 GEOCODING: "${normalizedInput}" with London constraints`);
+      
+      const fetch = (await import('node-fetch')).default;
+      
+      // London-constrained geocoding
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(normalizedInput)}.json?` +
+        `access_token=${API_CONFIG.MAPBOX_TOKEN}&` +
+        `country=GB&` +
+        `bbox=-0.51,51.28,0.33,51.70&` + // London bounding box
+        `proximity=-0.1278,51.5074&` + // Central London
+        `types=place,postcode,address,poi,neighborhood&` +
+        `limit=10`;
+      
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      
+      const data = await response.json();
+      const londonResult = this.findBestLondonResult(data.features, normalizedInput);
+      
+      if (londonResult) {
+        console.log(`✅ GEOCODING SUCCESS`);
+        return londonResult;
+      }
+      
+      console.log('❌ No valid London results from geocoding');
+      return null;
+      
+    } catch (error) {
+      console.error('🚨 Geocoding failed:', error.message);
+      return null;
+    }
+  }
+
+  findBestLondonResult(features, originalInput) {
+    if (!features || features.length === 0) return null;
+    
+    // Score and filter results
+    const scoredResults = features
+      .map(feature => this.scoreGeocodingResult(feature, originalInput))
+      .filter(result => result.isLondon)
+      .sort((a, b) => b.score - a.score);
+    
+    if (scoredResults.length === 0) return null;
+    
+    const best = scoredResults[0];
+    console.log(`🏆 Best geocoding result: ${best.feature.place_name} (score: ${best.score})`);
+    
+    return {
+      coordinates: best.feature.center,
+      name: this.cleanLocationName(best.feature.text || best.feature.place_name),
+      type: 'geocoded',
+      confidence: best.score > 80 ? 'high' : (best.score > 60 ? 'medium' : 'low'),
+      source: 'mapbox_geocoding',
+      fullData: best.feature
+    };
+  }
+
+  scoreGeocodingResult(feature, originalInput) {
+    let score = 0;
+    let isLondon = false;
+    
+    const [lng, lat] = feature.center;
+    const name = (feature.place_name || '').toLowerCase();
+    
+    // CRITICAL: London boundary check
+    if (this.isInLondonBounds(feature.center)) {
+      isLondon = true;
+      score += 50; // Base London bonus
+    }
+    
+    // Context analysis for London indicators
+    const context = feature.context || [];
+    const londonIndicators = ['london', 'greater london', 'england', 'united kingdom'];
+    for (const ctx of context) {
+      const ctxText = (ctx.text || '').toLowerCase();
+      if (londonIndicators.some(indicator => ctxText.includes(indicator))) {
+        isLondon = true;
+        score += 20;
+      }
+    }
+    
+    // Relevance score from Mapbox
+    score += (feature.relevance || 0) * 20;
+    
+    // Penalize obviously wrong locations (like Brentwood)
+    if (name.includes('brentwood') || name.includes('essex') || name.includes('hertfordshire')) {
+      score = 0;
+      isLondon = false;
+    }
+    
+    console.log(`📊 Scored "${feature.place_name}": ${score} (London: ${isLondon})`);
+    
+    return { feature, score, isLondon };
+  }
+
+  isInLondonBounds(coordinates) {
+    const [lng, lat] = coordinates;
+    const bounds = this.londonBounds.strict;
+    
+    return lat >= bounds.minLat && 
+           lat <= bounds.maxLat &&
+           lng >= bounds.minLng && 
+           lng <= bounds.maxLng;
+  }
+
+  cleanLocationName(name) {
+    if (!name) return 'Unknown Location';
+    
+    return name
+      .replace(/,.*$/, '') // Remove everything after first comma
+      .replace(/\b(Station|Underground|Tube|Rail)\b/gi, '') // Remove transport type words
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
+  }
+
+  toTitleCase(str) {
+    return str.replace(/\w\S*/g, (txt) => 
+      txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
+    );
+  }
+}
+
+// Initialize the resolver
+const londonResolver = new LondonLocationResolver();
+
 // Middleware
 app.use(helmet());
 app.use(cors({
@@ -367,6 +649,8 @@ app.post('/api/search/meeting-spots', async (req, res) => {
     });
   }
 });
+
+
 
 // ADD this helper function to validate London boundaries
 function isInLondon(coordinates) {
