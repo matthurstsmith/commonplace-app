@@ -733,51 +733,351 @@ async function geocodeLocation(locationName) {
 // PERFORMANCE-OPTIMIZED MEETING SPOT ALGORITHM
 // This replaces the existing findOptimalMeetingSpots function
 
+// HYBRID MEETING POINT ALGORITHM
+// Combines intersection-based and direct-route-based meeting point discovery
+
 async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null, originalLocation1 = null, originalLocation2 = null) {
-  console.log('Starting PERFORMANCE-OPTIMIZED algorithm...');
+  console.log('Starting HYBRID algorithm (intersection + direct route)...');
   const startTime = Date.now();
   
-  // Validate coordinates
   if (!Array.isArray(coords1) || !Array.isArray(coords2)) {
     throw new Error('Algorithm requires coordinate arrays, not location names');
   }
   
   console.log('Using coordinates:', { coords1, coords2 });
   
-  // PHASE 1: SMART ISOCHRONE COLLECTION WITH EARLY TERMINATION
-  const collectedAreas = await collectAreasWithEarlyTermination(coords1, coords2);
+  // PHASE 1: DIRECT ROUTE ANALYSIS (New!)
+  console.log('🚂 PHASE 1: Analyzing direct route between starting points...');
+  const directRouteCandidates = await findDirectRouteMeetingPoints(coords1, coords2);
   
-  if (collectedAreas.length === 0) {
-    console.log('No mutually accessible areas found, trying fallback...');
+  // PHASE 2: INTERSECTION ANALYSIS (Existing, but optimized)
+  console.log('🔄 PHASE 2: Finding mutually accessible areas...');
+  const intersectionCandidates = await collectAreasWithEarlyTermination(coords1, coords2);
+  
+  // PHASE 3: COMBINE AND DEDUPLICATE CANDIDATES
+  const allCandidates = combineAndDeduplicateCandidates(directRouteCandidates, intersectionCandidates);
+  console.log(`🎯 Combined candidates: ${allCandidates.length} areas (${directRouteCandidates.length} direct + ${intersectionCandidates.length} intersection)`);
+  
+  if (allCandidates.length === 0) {
+    console.log('No candidates found, trying fallback...');
     return await fallbackGeographicAnalysis(coords1, coords2, meetingTime, originalLocation1, originalLocation2);
   }
   
-  console.log(`✅ Collected ${collectedAreas.length} candidate areas for analysis`);
+  // PHASE 4: SMART PRE-FILTERING
+  const preFilteredAreas = await preFilterAreas(allCandidates, coords1, coords2);
   
-  // PHASE 2: FAST PRE-FILTERING
-  const preFilteredAreas = await preFilterAreas(collectedAreas, coords1, coords2);
-  console.log(`✅ Pre-filtered to ${preFilteredAreas.length} high-potential areas`);
-  
-  // PHASE 3: PARALLEL JOURNEY ANALYSIS
+  // PHASE 5: PARALLEL JOURNEY ANALYSIS
   const analyzedAreas = await parallelJourneyAnalysis(preFilteredAreas, coords1, coords2, meetingTime, originalLocation1, originalLocation2);
   
   if (analyzedAreas.length === 0) {
     throw new Error('No viable meeting areas found after analysis');
   }
   
-  // PHASE 4: SCORING AND SELECTION
+  // PHASE 6: ENHANCED SCORING (considers route type)
   const scoredAreas = analyzedAreas.map(area => ({
     ...area,
-    score: calculateAreaConvenienceScore(area)
+    score: calculateEnhancedAreaScore(area),
+    routeType: area.routeType || 'intersection' // Track how we found this area
   }));
   
   scoredAreas.sort((a, b) => b.score - a.score);
   const diverseResults = selectDiverseAreas(scoredAreas, 3);
   
   const totalTime = Date.now() - startTime;
-  console.log(`🚀 Algorithm completed in ${totalTime}ms with ${diverseResults.length} results`);
+  console.log(`🚀 Hybrid algorithm completed in ${totalTime}ms`);
+  console.log('Final results:', diverseResults.map(r => `${r.name} (${r.routeType}, ${r.averageTime}min avg)`));
   
   return diverseResults;
+}
+
+// NEW: DIRECT ROUTE MEETING POINT DISCOVERY
+async function findDirectRouteMeetingPoints(coords1, coords2) {
+  console.log('🗺️ Analyzing direct route between starting points...');
+  
+  try {
+    // Step 1: Get the direct journey between the two points
+    const directJourney = await getDirectJourney(coords1, coords2);
+    
+    if (!directJourney || !directJourney.legs) {
+      console.log('❌ No direct journey found');
+      return [];
+    }
+    
+    console.log(`📍 Direct journey found: ${directJourney.duration} minutes, ${directJourney.legs.length} legs`);
+    
+    // Step 2: Extract stations along the route
+    const routeStations = extractStationsFromJourney(directJourney);
+    console.log(`🚉 Found ${routeStations.length} stations along direct route:`, routeStations.map(s => s.name));
+    
+    // Step 3: Find optimal midpoint stations
+    const midpointCandidates = findOptimalMidpointStations(routeStations, directJourney.duration);
+    console.log(`🎯 Selected ${midpointCandidates.length} midpoint candidates:`, midpointCandidates.map(s => s.name));
+    
+    // Step 4: Convert to meeting area format
+    const meetingAreas = await convertStationsToMeetingAreas(midpointCandidates);
+    
+    return meetingAreas.map(area => ({ ...area, routeType: 'direct_route' }));
+    
+  } catch (error) {
+    console.error('❌ Direct route analysis failed:', error.message);
+    return [];
+  }
+}
+
+// Get direct journey using TfL API
+async function getDirectJourney(fromCoords, toCoords) {
+  if (!API_CONFIG.TFL_API_KEY) {
+    console.log('⚠️ No TfL API key available');
+    return null;
+  }
+  
+  try {
+    const tflUrl = `https://api.tfl.gov.uk/Journey/JourneyResults/${fromCoords[1]},${fromCoords[0]}/to/${toCoords[1]},${toCoords[0]}?` +
+      `mode=tube,bus,national-rail,dlr,overground,elizabeth-line&` +
+      `journeyPreference=LeastTime&` +
+      `app_key=${API_CONFIG.TFL_API_KEY}`;
+    
+    console.log('🔍 Getting direct journey from TfL...');
+    const fetch = (await import('node-fetch')).default;
+    const response = await fetch(tflUrl);
+    
+    if (!response.ok) {
+      throw new Error(`TfL API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.journeys || data.journeys.length === 0) {
+      return null;
+    }
+    
+    // Return the fastest journey
+    return data.journeys[0];
+    
+  } catch (error) {
+    console.error('Direct journey request failed:', error.message);
+    return null;
+  }
+}
+
+// Extract stations from a TfL journey
+function extractStationsFromJourney(journey) {
+  const stations = [];
+  
+  if (!journey.legs) return stations;
+  
+  journey.legs.forEach(leg => {
+    // Add departure point
+    if (leg.departurePoint && leg.departurePoint.commonName) {
+      stations.push({
+        name: leg.departurePoint.commonName,
+        coordinates: [leg.departurePoint.lat, leg.departurePoint.lon],
+        naptanId: leg.departurePoint.naptanId,
+        legDuration: leg.duration,
+        mode: leg.mode?.name
+      });
+    }
+    
+    // Add arrival point
+    if (leg.arrivalPoint && leg.arrivalPoint.commonName) {
+      stations.push({
+        name: leg.arrivalPoint.commonName,
+        coordinates: [leg.arrivalPoint.lat, leg.arrivalPoint.lon],
+        naptanId: leg.arrivalPoint.naptanId,
+        legDuration: leg.duration,
+        mode: leg.mode?.name
+      });
+    }
+    
+    // Add intermediate stops if available
+    if (leg.path && leg.path.stopPoints) {
+      leg.path.stopPoints.forEach(stop => {
+        if (stop.name && stop.lat && stop.lon) {
+          stations.push({
+            name: stop.name,
+            coordinates: [stop.lat, stop.lon],
+            naptanId: stop.naptanId,
+            legDuration: leg.duration,
+            mode: leg.mode?.name,
+            isIntermediate: true
+          });
+        }
+      });
+    }
+  });
+  
+  // Remove duplicates and clean up
+  const uniqueStations = [];
+  const seen = new Set();
+  
+  stations.forEach(station => {
+    const key = `${station.name}_${station.coordinates[0].toFixed(4)}_${station.coordinates[1].toFixed(4)}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueStations.push(station);
+    }
+  });
+  
+  return uniqueStations;
+}
+
+// Find optimal midpoint stations along the route
+function findOptimalMidpointStations(stations, totalJourneyTime) {
+  if (stations.length < 3) return []; // Need at least start, middle, end
+  
+  const targetTime = totalJourneyTime / 2; // Aim for midpoint in time
+  const candidates = [];
+  
+  // Score stations based on how close they are to the temporal midpoint
+  stations.forEach((station, index) => {
+    // Estimate time to this station (rough approximation)
+    const estimatedTimeToStation = (index / stations.length) * totalJourneyTime;
+    const timeDeviation = Math.abs(estimatedTimeToStation - targetTime);
+    
+    // Prefer major stations/interchanges
+    const isMajorStation = checkIfMajorStation(station.name);
+    const isInterchange = station.mode && ['tube', 'national-rail', 'elizabeth-line'].includes(station.mode);
+    
+    let score = 100 - timeDeviation; // Closer to midpoint = higher score
+    if (isMajorStation) score += 20;
+    if (isInterchange) score += 15;
+    if (station.isIntermediate) score -= 5; // Slight preference for terminus stations
+    
+    candidates.push({
+      ...station,
+      score,
+      estimatedTimeToStation,
+      timeDeviation
+    });
+  });
+  
+  // Sort by score and return top candidates
+  candidates.sort((a, b) => b.score - a.score);
+  
+  // Return top 3-5 candidates, but ensure they're spread out
+  const selected = [];
+  const minDistance = 0.01; // ~1km minimum separation
+  
+  for (const candidate of candidates) {
+    const tooClose = selected.some(s => 
+      Math.abs(s.coordinates[0] - candidate.coordinates[0]) < minDistance &&
+      Math.abs(s.coordinates[1] - candidate.coordinates[1]) < minDistance
+    );
+    
+    if (!tooClose) {
+      selected.push(candidate);
+      if (selected.length >= 5) break;
+    }
+  }
+  
+  console.log('🎯 Midpoint station scoring:', selected.map(s => `${s.name}: ${s.score.toFixed(1)}`));
+  
+  return selected;
+}
+
+// Check if a station name indicates a major station
+function checkIfMajorStation(stationName) {
+  const majorStations = [
+    'paddington', 'victoria', 'waterloo', 'london bridge', 'liverpool street',
+    'kings cross', 'euston', 'marylebone', 'charing cross', 'cannon street',
+    'moorgate', 'bank', 'oxford circus', 'bond street', 'green park',
+    'piccadilly circus', 'leicester square', 'tottenham court road',
+    'warren street', 'baker street', 'edgware road', 'westminster'
+  ];
+  
+  const lowerName = stationName.toLowerCase();
+  return majorStations.some(major => lowerName.includes(major));
+}
+
+// Convert stations to meeting area format
+async function convertStationsToMeetingAreas(stations) {
+  const meetingAreas = [];
+  
+  for (const station of stations) {
+    // Try to match with existing LONDON_MEETING_AREAS first
+    const existingArea = LONDON_MEETING_AREAS.find(area => 
+      area.name.toLowerCase().includes(station.name.toLowerCase()) ||
+      station.name.toLowerCase().includes(area.name.toLowerCase())
+    );
+    
+    if (existingArea) {
+      meetingAreas.push(existingArea);
+    } else {
+      // Create new meeting area from station
+      meetingAreas.push({
+        name: cleanStationName(station.name),
+        coordinates: [station.coordinates[1], station.coordinates[0]], // Swap to [lng, lat]
+        type: 'station',
+        zones: estimateZoneFromCoordinates(station.coordinates),
+        routeType: 'direct_route'
+      });
+    }
+  }
+  
+  return meetingAreas;
+}
+
+function cleanStationName(name) {
+  return name
+    .replace(/ Station$/, '')
+    .replace(/ Underground Station$/, '')
+    .replace(/ Rail Station$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function estimateZoneFromCoordinates(coords) {
+  const [lat, lng] = coords;
+  
+  // Very rough zone estimation based on distance from central London
+  const centralLondon = [51.5074, -0.1278];
+  const distance = Math.sqrt(
+    Math.pow(lat - centralLondon[0], 2) + Math.pow(lng - centralLondon[1], 2)
+  );
+  
+  if (distance < 0.05) return [1];        // ~5km from center
+  if (distance < 0.15) return [1, 2];     // ~15km from center  
+  if (distance < 0.25) return [2, 3];     // ~25km from center
+  return [3, 4];                          // Further out
+}
+
+// COMBINE AND DEDUPLICATE CANDIDATES
+function combineAndDeduplicateCandidates(directCandidates, intersectionCandidates) {
+  console.log(`🔀 Combining candidates: ${directCandidates.length} direct + ${intersectionCandidates.length} intersection`);
+  
+  const combined = [...directCandidates];
+  const seenNames = new Set(directCandidates.map(c => c.name.toLowerCase()));
+  
+  // Add intersection candidates that aren't already included
+  intersectionCandidates.forEach(candidate => {
+    const nameLower = candidate.name.toLowerCase();
+    if (!seenNames.has(nameLower)) {
+      seenNames.add(nameLower);
+      combined.push({ ...candidate, routeType: 'intersection' });
+    }
+  });
+  
+  console.log(`✅ Combined ${combined.length} unique candidates`);
+  return combined;
+}
+
+// ENHANCED SCORING that considers route type
+function calculateEnhancedAreaScore(area) {
+  const baseScore = calculateAreaConvenienceScore(area);
+  
+  // Bonus for direct route solutions (they're often more intuitive)
+  if (area.routeType === 'direct_route') {
+    // Bigger bonus for faster average times (direct routes should be fast)
+    if (area.averageTime <= 20) {
+      return baseScore + 15; // Significant bonus for fast direct routes
+    } else if (area.averageTime <= 30) {
+      return baseScore + 8;  // Moderate bonus
+    } else {
+      return baseScore + 3;  // Small bonus (direct but slow)
+    }
+  }
+  
+  return baseScore;
 }
 
 // PHASE 1: SMART EARLY TERMINATION ISOCHRONE COLLECTION
