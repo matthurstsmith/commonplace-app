@@ -15,7 +15,10 @@ const LONDON_LOCATIONS_DATABASE = {
   areas: {
     'acton': { coords: [-0.2674, 51.5089], type: 'area', station: 'Acton Central' },
     'angel': { coords: [-0.1057, 51.5322], type: 'area', station: 'Angel' },
-    'borough market': { coords: [-0.0900, 51.5055], type: 'market', station: 'London Bridge' },
+    // FIX: Use more precise Borough Market coordinates and distinguish from Bank
+    'borough market': { coords: [-0.0909, 51.5055], type: 'market', station: 'London Bridge', description: 'Borough Market Food Market' },
+    'borough': { coords: [-0.0909, 51.5055], type: 'market', station: 'London Bridge', description: 'Borough Market Area' }, // Point to market, not Bank
+    'bank area': { coords: [-0.0886, 51.5133], type: 'financial', station: 'Bank', description: 'Bank Financial District' }, // Separate Bank area
     'camden': { coords: [-0.1426, 51.5390], type: 'area', station: 'Camden Town' },
     'canary wharf': { coords: [-0.0235, 51.5054], type: 'business', station: 'Canary Wharf' },
     'clapham': { coords: [-0.1376, 51.4618], type: 'area', station: 'Clapham Junction' },
@@ -37,13 +40,14 @@ const LONDON_LOCATIONS_DATABASE = {
   // Major stations with precise coordinates
   stations: {
     'baker street': [-0.1574, 51.5226],
-    'bank': [-0.0886, 51.5133],
+    'bank': [-0.0886, 51.5133], // Keep Bank station separate
     'bond street': [-0.1490, 51.5142],
+    'borough market': [-0.0909, 51.5055], // Add Borough Market as a station-like location
+    'london bridge': [-0.0864, 51.5049], // Nearest actual station to Borough Market
     'canary wharf': [-0.0235, 51.5054],
     'euston': [-0.1335, 51.5282],
     'kings cross': [-0.1240, 51.5308],
     'liverpool street': [-0.0817, 51.5176],
-    'london bridge': [-0.0864, 51.5049],
     'oxford circus': [-0.1415, 51.5154],
     'paddington': [-0.1759, 51.5154],
     'piccadilly circus': [-0.1347, 51.5098],
@@ -53,7 +57,7 @@ const LONDON_LOCATIONS_DATABASE = {
     'westminster': [-0.1276, 51.4994]
   },
   
-  // Common name variations and aliases
+  // FIXED: Updated aliases to prevent Borough Market -> Bank confusion
   aliases: {
     'king cross': 'kings cross',
     'kcx': 'kings cross',
@@ -65,10 +69,14 @@ const LONDON_LOCATIONS_DATABASE = {
     'vic': 'victoria',
     'waterloo station': 'waterloo',
     'london bridge station': 'london bridge',
-    'borough': 'borough market',
-    'the borough': 'borough market'
+    
+    // ADD explicit aliases for Borough Market area
+    'borough market area': 'borough market',
+    'borough food market': 'borough market',
+    'the borough market': 'borough market'
   }
 };
+
 
 // Mock Redis - always works, no external dependencies
 const redis = {
@@ -993,11 +1001,17 @@ async function getEnhancedJourneyDetails(fromCoords, toCoords, meetingTime = nul
     new Date(meetingTime).getMinutes().toString().padStart(2, '0') :
     hours + minutes;
   
+  // ENHANCED: Include Elizabeth Line and optimize mode selection
   const tflUrl = `https://api.tfl.gov.uk/Journey/JourneyResults/${fromCoords[1]},${fromCoords[0]}/to/${toCoords[1]},${toCoords[0]}?` +
     `mode=tube,bus,national-rail,dlr,overground,elizabeth-line,walking&` +
     `time=${encodeURIComponent(time)}&` +
     `timeIs=Departing&` +
+    `journeyPreference=LeastTime&` + // Optimize for speed
+    `walkingSpeed=Average&` +
+    `cyclePreference=None&` +
     `app_key=${API_CONFIG.TFL_API_KEY}`;
+  
+  console.log('Enhanced TfL API Request:', tflUrl);
   
   try {
     const fetch = (await import('node-fetch')).default;
@@ -1005,6 +1019,98 @@ async function getEnhancedJourneyDetails(fromCoords, toCoords, meetingTime = nul
 
     if (!response.ok) {
       console.error('TfL API Error:', response.status);
+      // Try fallback with fewer constraints
+      return await getOptimizedJourneyFallback(fromCoords, toCoords, meetingTime);
+    }
+
+    const data = await response.json();
+    
+    if (!data.journeys || data.journeys.length === 0) {
+      return await getOptimizedJourneyFallback(fromCoords, toCoords, meetingTime);
+    }
+
+    // ENHANCED: Select the fastest journey, not just the first
+    const bestJourney = selectOptimalJourney(data.journeys);
+    
+    return {
+      duration: bestJourney.duration,
+      changes: countJourneyChanges(bestJourney),
+      route: formatJourneyRoute(bestJourney),
+      modes: getJourneyModes(bestJourney),
+      fullData: bestJourney,
+      // Enhanced journey breakdown
+      steps: extractJourneySteps(bestJourney),
+      lines: extractTransportLines(bestJourney),
+      walkingTime: calculateWalkingTime(bestJourney),
+      // NEW: Add optimization indicators
+      optimizationUsed: 'fastest_route',
+      elizabethLineUsed: checkElizabethLineUsage(bestJourney)
+    };
+
+  } catch (error) {
+    console.error('Enhanced TfL journey request failed:', error.message);
+    return await getOptimizedJourneyFallback(fromCoords, toCoords, meetingTime);
+  }
+}
+
+// NEW: Journey optimization functions
+function selectOptimalJourney(journeys) {
+  if (journeys.length === 1) return journeys[0];
+  
+  // Score journeys based on time, changes, and walking
+  const scoredJourneys = journeys.map(journey => {
+    const changes = countJourneyChanges(journey);
+    const walkingTime = calculateWalkingTime(journey);
+    const elizabethLine = checkElizabethLineUsage(journey);
+    
+    // Scoring: prioritize time, then changes, with bonus for Elizabeth Line
+    let score = (120 - journey.duration) * 2; // Time factor (higher is better)
+    score -= changes * 15; // Change penalty
+    score -= walkingTime * 0.5; // Walking penalty
+    score += elizabethLine ? 20 : 0; // Elizabeth Line bonus
+    
+    return { journey, score };
+  });
+  
+  scoredJourneys.sort((a, b) => b.score - a.score);
+  
+  console.log('Journey optimization scores:', scoredJourneys.map((s, i) => 
+    `Journey ${i + 1}: ${s.score} (${s.journey.duration}min, ${countJourneyChanges(s.journey)} changes)`
+  ));
+  
+  return scoredJourneys[0].journey;
+}
+
+function checkElizabethLineUsage(journey) {
+  if (!journey.legs) return false;
+  
+  return journey.legs.some(leg => {
+    if (!leg.routeOptions || leg.routeOptions.length === 0) return false;
+    const route = leg.routeOptions[0];
+    const routeName = (route.name || '').toLowerCase();
+    const lineId = (route.lineIdentifier?.id || '').toLowerCase();
+    
+    return routeName.includes('elizabeth') || 
+           lineId.includes('elizabeth') ||
+           routeName.includes('crossrail');
+  });
+}
+
+async function getOptimizedJourneyFallback(fromCoords, toCoords, meetingTime) {
+  console.log('Using optimized fallback journey planning...');
+  
+  // Simplified request with core London transport modes
+  const tflUrl = `https://api.tfl.gov.uk/Journey/JourneyResults/${fromCoords[1]},${fromCoords[0]}/to/${toCoords[1]},${toCoords[0]}?` +
+    `mode=tube,elizabeth-line,national-rail,dlr,overground&` +
+    `journeyPreference=LeastTime&` +
+    `app_key=${API_CONFIG.TFL_API_KEY}`;
+  
+  try {
+    const fetch = (await import('node-fetch')).default;
+    const response = await fetch(tflUrl);
+
+    if (!response.ok) {
+      console.error('Fallback TfL API also failed:', response.status);
       return null;
     }
 
@@ -1015,21 +1121,16 @@ async function getEnhancedJourneyDetails(fromCoords, toCoords, meetingTime = nul
     }
 
     const journey = data.journeys[0];
-    
     return {
-      duration: journey.duration,
+      duration: journey.duration || 30,
       changes: countJourneyChanges(journey),
       route: formatJourneyRoute(journey),
       modes: getJourneyModes(journey),
-      fullData: journey,
-      // NEW: Enhanced journey breakdown
-      steps: extractJourneySteps(journey),
-      lines: extractTransportLines(journey),
-      walkingTime: calculateWalkingTime(journey)
+      optimizationUsed: 'fallback_core_modes'
     };
 
   } catch (error) {
-    console.error('TfL journey request failed:', error.message);
+    console.error('Fallback journey request failed:', error.message);
     return null;
   }
 }
@@ -1588,21 +1689,29 @@ function getDistance(coord1, coord2) {
 async function getLocationName(coordinates) {
   const cacheKey = `${coordinates[0].toFixed(4)},${coordinates[1].toFixed(4)}`;
   
-  if (locationNameCache.has(cacheKey)) {
+  if (locationNameCache && locationNameCache.has(cacheKey)) {
     return locationNameCache.get(cacheKey);
   }
 
   try {
-    const fetch = (await import('node-fetch')).default;
+    // ENHANCED: First check for exact matches in our London database
+    const exactMatch = findExactLocationMatch(coordinates);
+    if (exactMatch) {
+      console.log(`Exact location match found: ${exactMatch}`);
+      if (locationNameCache) locationNameCache.set(cacheKey, exactMatch);
+      return exactMatch;
+    }
     
-    // First try to match against our London database
-    const knownLocation = findKnownLondonLocation(coordinates);
-    if (knownLocation) {
-      locationNameCache.set(cacheKey, knownLocation);
-      return knownLocation;
+    // ENHANCED: Then check for nearby known locations with strict thresholds
+    const nearbyMatch = findNearbyLocationMatch(coordinates);
+    if (nearbyMatch) {
+      console.log(`Nearby location match found: ${nearbyMatch}`);
+      if (locationNameCache) locationNameCache.set(cacheKey, nearbyMatch);
+      return nearbyMatch;
     }
     
     // Fallback to Mapbox with London-specific parameters
+    const fetch = (await import('node-fetch')).default;
     const response = await fetch(
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${coordinates[0]},${coordinates[1]}.json?` +
       `access_token=${API_CONFIG.MAPBOX_TOKEN}&` +
@@ -1614,33 +1723,118 @@ async function getLocationName(coordinates) {
 
     if (!response.ok) {
       const fallbackName = await generateFallbackLocationName(coordinates);
-      locationNameCache.set(cacheKey, fallbackName);
+      if (locationNameCache) locationNameCache.set(cacheKey, fallbackName);
       return fallbackName;
     }
 
     const data = await response.json();
     
     if (data.features && data.features.length > 0) {
-      // Prioritize transport hubs and well-known locations
       const bestFeature = selectBestLocationFeature(data.features);
       let name = cleanLocationName(bestFeature.text || bestFeature.place_name);
       
-      locationNameCache.set(cacheKey, name);
+      // ENHANCED: Post-process to prevent Borough Market/Bank confusion
+      name = disambiguateLocationName(name, coordinates);
+      
+      if (locationNameCache) locationNameCache.set(cacheKey, name);
       return name;
     }
     
     const fallbackName = await generateFallbackLocationName(coordinates);
-    locationNameCache.set(cacheKey, fallbackName);
+    if (locationNameCache) locationNameCache.set(cacheKey, fallbackName);
     return fallbackName;
     
   } catch (error) {
     console.warn('Enhanced geocoding failed:', error);
     const fallbackName = await generateFallbackLocationName(coordinates);
-    locationNameCache.set(cacheKey, fallbackName);
+    if (locationNameCache) locationNameCache.set(cacheKey, fallbackName);
     return fallbackName;
   }
 }
 
+function findExactLocationMatch(coordinates) {
+  const [lng, lat] = coordinates;
+  const exactThreshold = 0.0001; // ~10m tolerance for exact matches
+  
+  // Check stations first (higher priority)
+  for (const [name, [sLng, sLat]] of Object.entries(LONDON_LOCATIONS_DATABASE.stations)) {
+    if (Math.abs(lng - sLng) < exactThreshold && Math.abs(lat - sLat) < exactThreshold) {
+      return toTitleCase(name);
+    }
+  }
+  
+  // Check areas
+  for (const [name, data] of Object.entries(LONDON_LOCATIONS_DATABASE.areas)) {
+    const [aLng, aLat] = data.coords;
+    if (Math.abs(lng - aLng) < exactThreshold && Math.abs(lat - aLat) < exactThreshold) {
+      return toTitleCase(name);
+    }
+  }
+  
+  return null;
+}
+
+function findNearbyLocationMatch(coordinates) {
+  const [lng, lat] = coordinates;
+  const nearbyThreshold = 0.003; // ~300m tolerance for nearby matches
+  
+  let closestMatch = null;
+  let closestDistance = Infinity;
+  
+  // Check stations first
+  for (const [name, [sLng, sLat]] of Object.entries(LONDON_LOCATIONS_DATABASE.stations)) {
+    const distance = Math.sqrt(Math.pow(lng - sLng, 2) + Math.pow(lat - sLat, 2));
+    if (distance < nearbyThreshold && distance < closestDistance) {
+      closestMatch = toTitleCase(name);
+      closestDistance = distance;
+    }
+  }
+  
+  // Only check areas if no close station found
+  if (!closestMatch) {
+    for (const [name, data] of Object.entries(LONDON_LOCATIONS_DATABASE.areas)) {
+      const [aLng, aLat] = data.coords;
+      const distance = Math.sqrt(Math.pow(lng - aLng, 2) + Math.pow(lat - aLat, 2));
+      if (distance < nearbyThreshold && distance < closestDistance) {
+        closestMatch = toTitleCase(name);
+        closestDistance = distance;
+      }
+    }
+  }
+  
+  return closestMatch;
+}
+
+function disambiguateLocationName(name, coordinates) {
+  const [lng, lat] = coordinates;
+  
+  // Specific fixes for Borough Market vs Bank confusion
+  const boroughMarketCoords = [-0.0909, 51.5055];
+  const bankCoords = [-0.0886, 51.5133];
+  
+  const distanceToBoroughMarket = Math.sqrt(
+    Math.pow(lng - boroughMarketCoords[0], 2) + Math.pow(lat - boroughMarketCoords[1], 2)
+  );
+  const distanceToBank = Math.sqrt(
+    Math.pow(lng - bankCoords[0], 2) + Math.pow(lat - bankCoords[1], 2)
+  );
+  
+  // If the location name suggests Borough but coordinates are closer to Borough Market
+  if ((name.toLowerCase().includes('borough') || name.toLowerCase().includes('market')) &&
+      distanceToBoroughMarket < distanceToBank) {
+    return 'Borough Market';
+  }
+  
+  // If coordinates suggest Bank area but name is ambiguous
+  if (name.toLowerCase().includes('bank') && distanceToBank < 0.002) {
+    return 'Bank';
+  }
+  
+  return name;
+}
+
+// Initialize the location name cache if it doesn't exist
+const locationNameCache = new Map();
 async function resolveLocationToCoordinates(locationInput) {
   console.log(`Resolving location: "${locationInput}"`);
   
@@ -1690,24 +1884,36 @@ async function resolveLocationToCoordinates(locationInput) {
 
 function findKnownLondonLocation(coordinates) {
   const [lng, lat] = coordinates;
-  const threshold = 0.008; // ~800m tolerance
+  const threshold = 0.002; // Reduced from 0.008 to ~200m tolerance (was ~800m)
   
-  // Check stations first
-  for (const [name, [sLng, sLat]] of Object.entries(LONDON_LOCATIONS_DATABASE.stations)) {
-    if (Math.abs(lng - sLng) < threshold && Math.abs(lat - sLat) < threshold) {
-      return toTitleCase(name);
-    }
-  }
+  let bestMatch = null;
+  let closestDistance = Infinity;
   
-  // Check areas
+  // Check areas first (Borough Market is an area, not a station)
   for (const [name, data] of Object.entries(LONDON_LOCATIONS_DATABASE.areas)) {
     const [aLng, aLat] = data.coords;
-    if (Math.abs(lng - aLng) < threshold && Math.abs(lat - aLat) < threshold) {
-      return toTitleCase(name);
+    const distance = Math.abs(lng - aLng) + Math.abs(lat - aLat); // Manhattan distance
+    
+    if (distance < threshold && distance < closestDistance) {
+      bestMatch = toTitleCase(name);
+      closestDistance = distance;
     }
   }
   
-  return null;
+  // Only check stations if no area found (prevents Borough Market → Bank confusion)
+  if (!bestMatch) {
+    for (const [name, [sLng, sLat]] of Object.entries(LONDON_LOCATIONS_DATABASE.stations)) {
+      const distance = Math.abs(lng - sLng) + Math.abs(lat - sLat);
+      
+      if (distance < threshold && distance < closestDistance) {
+        bestMatch = toTitleCase(name);
+        closestDistance = distance;
+      }
+    }
+  }
+  
+  console.log(`Location lookup for [${lng}, ${lat}]: found "${bestMatch}" at distance ${closestDistance}`);
+  return bestMatch;
 }
 
 function findPartialMatch(input) {
