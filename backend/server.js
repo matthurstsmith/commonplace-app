@@ -8,6 +8,8 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 
+const locationNameCache = new Map();
+
 const LONDON_LOCATIONS_DATABASE = {
   // Major areas and their precise coordinates
   areas: {
@@ -91,7 +93,7 @@ const API_CONFIG = {
 
 // Pre-defined London meeting areas - ADD THIS AT THE TOP OF server.js after the API_CONFIG
 const LONDON_MEETING_AREAS = [
-  // Central London
+  // Zone 1 - Central London Major Stations
   { name: "King's Cross", coordinates: [-0.1240, 51.5308], type: "major_station", zones: [1] },
   { name: "London Bridge", coordinates: [-0.0864, 51.5049], type: "major_station", zones: [1] },
   { name: "Victoria", coordinates: [-0.1448, 51.4952], type: "major_station", zones: [1] },
@@ -101,17 +103,29 @@ const LONDON_MEETING_AREAS = [
   { name: "Oxford Circus", coordinates: [-0.1415, 51.5154], type: "major_station", zones: [1] },
   { name: "Bond Street", coordinates: [-0.1490, 51.5142], type: "major_station", zones: [1] },
   { name: "Tottenham Court Road", coordinates: [-0.1308, 51.5165], type: "major_station", zones: [1] },
+  { name: "Bank", coordinates: [-0.0886, 51.5133], type: "major_station", zones: [1] },
+  { name: "Leicester Square", coordinates: [-0.1281, 51.5118], type: "major_station", zones: [1] },
+  { name: "Piccadilly Circus", coordinates: [-0.1347, 51.5098], type: "major_station", zones: [1] },
+  { name: "Westminster", coordinates: [-0.1276, 51.4994], type: "major_station", zones: [1] },
+  { name: "Embankment", coordinates: [-0.1223, 51.5074], type: "major_station", zones: [1] },
+  { name: "Charing Cross", coordinates: [-0.1248, 51.5080], type: "major_station", zones: [1] },
   
-  // Zone 1 Districts
+  // Zone 1 - Districts and Areas
   { name: "Shoreditch", coordinates: [-0.0778, 51.5227], type: "district", zones: [1] },
   { name: "Clerkenwell", coordinates: [-0.1102, 51.5217], type: "district", zones: [1] },
   { name: "Bloomsbury", coordinates: [-0.1276, 51.5220], type: "district", zones: [1] },
   { name: "Covent Garden", coordinates: [-0.1243, 51.5118], type: "district", zones: [1] },
   { name: "Soho", coordinates: [-0.1317, 51.5142], type: "district", zones: [1] },
   { name: "Borough Market", coordinates: [-0.0909, 51.5055], type: "district", zones: [1] },
-  { name: "Canary Wharf", coordinates: [-0.0235, 51.5054], type: "major_station", zones: [2] },
+  { name: "Southwark", coordinates: [-0.1037, 51.5016], type: "district", zones: [1] },
+  { name: "Fitzrovia", coordinates: [-0.1392, 51.5186], type: "district", zones: [1] },
+  { name: "Holborn", coordinates: [-0.1200, 51.5174], type: "district", zones: [1] },
+  { name: "Old Street", coordinates: [-0.0878, 51.5259], type: "major_station", zones: [1] },
+  { name: "Angel", coordinates: [-0.1057, 51.5322], type: "major_station", zones: [1] },
+  { name: "Farringdon", coordinates: [-0.1053, 51.5203], type: "major_station", zones: [1] },
   
-  // Zone 2 Areas
+  // Zone 2 - Inner London
+  { name: "Canary Wharf", coordinates: [-0.0235, 51.5054], type: "major_station", zones: [2] },
   { name: "Camden", coordinates: [-0.1426, 51.5390], type: "district", zones: [2] },
   { name: "Islington", coordinates: [-0.1031, 51.5362], type: "district", zones: [2] },
   { name: "Clapham", coordinates: [-0.1376, 51.4618], type: "district", zones: [2] },
@@ -119,8 +133,137 @@ const LONDON_MEETING_AREAS = [
   { name: "Greenwich", coordinates: [-0.0088, 51.4825], type: "district", zones: [2, 3] },
   { name: "Hampstead", coordinates: [-0.1786, 51.5560], type: "district", zones: [2] },
   { name: "Notting Hill", coordinates: [-0.2058, 51.5090], type: "district", zones: [2] },
-  { name: "Angel", coordinates: [-0.1057, 51.5322], type: "major_station", zones: [1] },
-  { name: "Old Street", coordinates: [-0.0878, 51.5259], type: "major_station", zones: [1] },
+  { name: "Hackney", coordinates: [-0.0553, 51.5448], type: "district", zones: [2] },
+  { name: "Bethnal Green", coordinates: [-0.0549, 51.5273], type: "district", zones: [2] },
+  { name: "Mile End", coordinates: [-0.0333, 51.5249], type: "district", zones: [2] },
+  { name: "Bow", coordinates: [-0.0247, 51.5269], type: "district", zones: [2] },
+  { name: "Dalston", coordinates: [-0.0750, 51.5461], type: "district", zones: [2] },
+  { name: "London Fields", coordinates: [-0.0583, 51.5422], type: "district", zones: [2] },
+  { name: "Victoria Park", coordinates: [-0.0439, 51.5355], type: "district", zones: [2] },
+  { name: "Oval", coordinates: [-0.1133, 51.4816], type: "district", zones: [2] },
+  { name: "Elephant & Castle", coordinates: [-0.0992, 51.4939], type: "district", zones: [1, 2] },
+  { name: "Old Kent Road", coordinates: [-0.0617, 51.4819], type: "district", zones: [2] },
+  { name: "New Cross", coordinates: [-0.0324, 51.4760], type: "district", zones: [2] },
+  { name: "Deptford", coordinates: [-0.0255, 51.4777], type: "district", zones: [2] },
+  { name: "Bermondsey", coordinates: [-0.0635, 51.4979], type: "district", zones: [2] },
+  { name: "Rotherhithe", coordinates: [-0.0515, 51.5011], type: "district", zones: [2] },
+  { name: "Wapping", coordinates: [-0.0563, 51.5043], type: "district", zones: [2] },
+  { name: "Limehouse", coordinates: [-0.0396, 51.5123], type: "district", zones: [2] },
+  { name: "Poplar", coordinates: [-0.0159, 51.5077], type: "district", zones: [2] },
+  { name: "Whitechapel", coordinates: [-0.0607, 51.5196], type: "district", zones: [2] },
+  { name: "Stepney", coordinates: [-0.0421, 51.5170], type: "district", zones: [2] },
+  { name: "Hammersmith", coordinates: [-0.2239, 51.4916], type: "district", zones: [2] },
+  { name: "Fulham", coordinates: [-0.1953, 51.4700], type: "district", zones: [2] },
+  { name: "Chelsea", coordinates: [-0.1687, 51.4875], type: "district", zones: [1, 2] },
+  { name: "Kensington", coordinates: [-0.1938, 51.4988], type: "district", zones: [1, 2] },
+  { name: "Earls Court", coordinates: [-0.1939, 51.4908], type: "district", zones: [1, 2] },
+  { name: "South Kensington", coordinates: [-0.1746, 51.4945], type: "district", zones: [1] },
+  { name: "Knightsbridge", coordinates: [-0.1607, 51.5010], type: "district", zones: [1] },
+  { name: "Belgravia", coordinates: [-0.1530, 51.4959], type: "district", zones: [1] },
+  { name: "Pimlico", coordinates: [-0.1347, 51.4893], type: "district", zones: [1] },
+  { name: "Vauxhall", coordinates: [-0.1236, 51.4861], type: "district", zones: [1, 2] },
+  { name: "Stockwell", coordinates: [-0.1225, 51.4720], type: "district", zones: [2] },
+  { name: "Camberwell", coordinates: [-0.0919, 51.4742], type: "district", zones: [2] },
+  { name: "Peckham", coordinates: [-0.0690, 51.4739], type: "district", zones: [2] },
+  
+  // Zone 3 - Outer Inner London
+  { name: "Stratford", coordinates: [0.0042, 51.5434], type: "major_station", zones: [2, 3] },
+  { name: "Canary Wharf", coordinates: [-0.0235, 51.5054], type: "major_station", zones: [2] },
+  { name: "Wimbledon", coordinates: [-0.2044, 51.4214], type: "major_station", zones: [3] },
+  { name: "Richmond", coordinates: [-0.3019, 51.4613], type: "major_station", zones: [4] },
+  { name: "Clapham Junction", coordinates: [-0.1700, 51.4642], type: "major_station", zones: [2] },
+  { name: "East Croydon", coordinates: [-0.0559, 51.3756], type: "major_station", zones: [5] },
+  { name: "Ealing Broadway", coordinates: [-0.3016, 51.5130], type: "major_station", zones: [3] },
+  { name: "Acton", coordinates: [-0.2674, 51.5089], type: "district", zones: [3] },
+  { name: "Putney", coordinates: [-0.2159, 51.4642], type: "district", zones: [2] },
+  { name: "Wandsworth", coordinates: [-0.1885, 51.4567], type: "district", zones: [2, 3] },
+  { name: "Battersea", coordinates: [-0.1755, 51.4816], type: "district", zones: [2] },
+  { name: "Balham", coordinates: [-0.1530, 51.4431], type: "district", zones: [3] },
+  { name: "Tooting", coordinates: [-0.1678, 51.4265], type: "district", zones: [3] },
+  { name: "Mitcham", coordinates: [-0.1684, 51.4026], type: "district", zones: [4] },
+  { name: "Morden", coordinates: [-0.1946, 51.4018], type: "district", zones: [4] },
+  { name: "Raynes Park", coordinates: [-0.2291, 51.4095], type: "district", zones: [4] },
+  { name: "New Malden", coordinates: [-0.2523, 51.4027], type: "district", zones: [4] },
+  { name: "Kingston upon Thames", coordinates: [-0.3064, 51.4120], type: "district", zones: [6] },
+  { name: "Surbiton", coordinates: [-0.2967, 51.3927], type: "district", zones: [6] },
+  { name: "Barnes", coordinates: [-0.2420, 51.4685], type: "district", zones: [3] },
+  { name: "Mortlake", coordinates: [-0.2654, 51.4697], type: "district", zones: [3] },
+  { name: "Kew", coordinates: [-0.2882, 51.4879], type: "district", zones: [3] },
+  { name: "Chiswick", coordinates: [-0.2536, 51.4921], type: "district", zones: [3] },
+  { name: "Brentford", coordinates: [-0.3112, 51.4816], type: "district", zones: [4] },
+  { name: "Hounslow", coordinates: [-0.3714, 51.4735], type: "district", zones: [5] },
+  { name: "Twickenham", coordinates: [-0.3247, 51.4464], type: "district", zones: [5] },
+  { name: "Feltham", coordinates: [-0.4119, 51.4485], type: "district", zones: [6] },
+  { name: "Ashford", coordinates: [-0.4619, 51.4327], type: "district", zones: [6] },
+  
+  // Zone 4-6 - Outer London
+  { name: "Heathrow", coordinates: [-0.4543, 51.4700], type: "major_station", zones: [6] },
+  { name: "Uxbridge", coordinates: [-0.4781, 51.5462], type: "major_station", zones: [6] },
+  { name: "Ruislip", coordinates: [-0.4213, 51.5730], type: "district", zones: [6] },
+  { name: "Hillingdon", coordinates: [-0.4499, 51.5462], type: "district", zones: [6] },
+  { name: "Hayes", coordinates: [-0.4192, 51.5049], type: "district", zones: [5] },
+  { name: "Southall", coordinates: [-0.3822, 51.5061], type: "district", zones: [4] },
+  { name: "Greenford", coordinates: [-0.3440, 51.5425], type: "district", zones: [4] },
+  { name: "Perivale", coordinates: [-0.3232, 51.5365], type: "district", zones: [4] },
+  { name: "Hanger Lane", coordinates: [-0.2932, 51.5303], type: "district", zones: [3] },
+  { name: "Park Royal", coordinates: [-0.2840, 51.5270], type: "district", zones: [3] },
+  { name: "Alperton", coordinates: [-0.2988, 51.5408], type: "district", zones: [4] },
+  { name: "Wembley", coordinates: [-0.2964, 51.5523], type: "district", zones: [4] },
+  { name: "Harrow", coordinates: [-0.3341, 51.5898], type: "district", zones: [5] },
+  { name: "Pinner", coordinates: [-0.3808, 51.5938], type: "district", zones: [5] },
+  { name: "Watford", coordinates: [-0.3962, 51.6562], type: "district", zones: [7] }, // Outside zone 6 but commonly accessed
+  { name: "Stanmore", coordinates: [-0.3028, 51.6194], type: "district", zones: [5] },
+  { name: "Edgware", coordinates: [-0.2750, 51.6137], type: "district", zones: [5] },
+  { name: "Mill Hill", coordinates: [-0.2606, 51.6110], type: "district", zones: [4] },
+  { name: "Hendon", coordinates: [-0.2257, 51.5848], type: "district", zones: [3, 4] },
+  { name: "Golders Green", coordinates: [-0.1941, 51.5723], type: "district", zones: [3] },
+  { name: "Finchley", coordinates: [-0.1933, 51.5975], type: "district", zones: [4] },
+  { name: "Barnet", coordinates: [-0.2037, 51.6461], type: "district", zones: [5] },
+  { name: "Muswell Hill", coordinates: [-0.1436, 51.5887], type: "district", zones: [3] },
+  { name: "Crouch End", coordinates: [-0.1255, 51.5907], type: "district", zones: [3] },
+  { name: "Hornsey", coordinates: [-0.1111, 51.5882], type: "district", zones: [3] },
+  { name: "Wood Green", coordinates: [-0.1097, 51.5975], type: "district", zones: [3] },
+  { name: "Tottenham", coordinates: [-0.0690, 51.5934], type: "district", zones: [3] },
+  { name: "Edmonton", coordinates: [-0.0814, 51.6156], type: "district", zones: [4] },
+  { name: "Enfield", coordinates: [-0.0824, 51.6528], type: "district", zones: [5] },
+  { name: "Winchmore Hill", coordinates: [-0.1008, 51.6347], type: "district", zones: [4] },
+  { name: "Palmers Green", coordinates: [-0.1085, 51.6186], type: "district", zones: [4] },
+  { name: "Southgate", coordinates: [-0.1289, 51.6322], type: "district", zones: [4] },
+  { name: "Cockfosters", coordinates: [-0.1496, 51.6518], type: "district", zones: [5] },
+  { name: "Chingford", coordinates: [-0.0095, 51.6277], type: "district", zones: [5] },
+  { name: "Walthamstow", coordinates: [-0.0194, 51.5831], type: "district", zones: [3] },
+  { name: "Leyton", coordinates: [-0.0060, 51.5634], type: "district", zones: [3] },
+  { name: "Leytonstone", coordinates: [0.0083, 51.5681], type: "district", zones: [3, 4] },
+  { name: "Redbridge", coordinates: [0.0455, 51.5590], type: "district", zones: [4] },
+  { name: "Ilford", coordinates: [0.0688, 51.5590], type: "district", zones: [4] },
+  { name: "Barking", coordinates: [0.0813, 51.5396], type: "district", zones: [4] },
+  { name: "Dagenham", coordinates: [0.1338, 51.5405], type: "district", zones: [5] },
+  { name: "Romford", coordinates: [0.1821, 51.5750], type: "district", zones: [6] },
+  { name: "Upminster", coordinates: [0.2511, 51.5588], type: "district", zones: [6] },
+  { name: "Hornchurch", coordinates: [0.2182, 51.5515], type: "district", zones: [6] },
+  { name: "Rainham", coordinates: [0.1902, 51.5156], type: "district", zones: [6] },
+  { name: "Purfleet", coordinates: [0.2342, 51.4844], type: "district", zones: [6] },
+  { name: "Grays", coordinates: [0.3224, 51.4756], type: "district", zones: [6] },
+  { name: "Dartford", coordinates: [0.2137, 51.4470], type: "district", zones: [6] },
+  { name: "Bexleyheath", coordinates: [0.1484, 51.4613], type: "district", zones: [6] },
+  { name: "Sidcup", coordinates: [0.1037, 51.4326], type: "district", zones: [5] },
+  { name: "Chislehurst", coordinates: [0.0751, 51.4177], type: "district", zones: [5] },
+  { name: "Orpington", coordinates: [0.0977, 51.3727], type: "district", zones: [6] },
+  { name: "Bromley", coordinates: [0.0140, 51.4067], type: "district", zones: [5] },
+  { name: "Beckenham", coordinates: [-0.0252, 51.4085], type: "district", zones: [4] },
+  { name: "Crystal Palace", coordinates: [-0.0728, 51.4184], type: "district", zones: [4] },
+  { name: "West Norwood", coordinates: [-0.1028, 51.4322], type: "district", zones: [3] },
+  { name: "Streatham", coordinates: [-0.1317, 51.4321], type: "district", zones: [3] },
+  { name: "Thornton Heath", coordinates: [-0.1007, 51.3988], type: "district", zones: [4] },
+  { name: "Croydon", coordinates: [-0.0982, 51.3762], type: "district", zones: [5] },
+  { name: "Purley", coordinates: [-0.1132, 51.3368], type: "district", zones: [6] },
+  { name: "Coulsdon", coordinates: [-0.1372, 51.3228], type: "district", zones: [6] },
+  { name: "Banstead", coordinates: [-0.2062, 51.3213], type: "district", zones: [6] },
+  { name: "Sutton", coordinates: [-0.1939, 51.3648], type: "district", zones: [5] },
+  { name: "Cheam", coordinates: [-0.2147, 51.3618], type: "district", zones: [5] },
+  { name: "Worcester Park", coordinates: [-0.2439, 51.3739], type: "district", zones: [4] },
+  { name: "Epsom", coordinates: [-0.2696, 51.3304], type: "district", zones: [6] },
+  { name: "Leatherhead", coordinates: [-0.3302, 51.2979], type: "district", zones: [6] }
 ];
 
 // Middleware
@@ -227,6 +370,267 @@ app.get('/api/locations/suggestions', async (req, res) => {
     });
   }
 });
+
+app.get('/api/locations/enhanced-suggestions', async (req, res) => {
+  try {
+    const { q: query } = req.query;
+    
+    if (!query || query.length < 2) {
+      return res.json({ suggestions: [] });
+    }
+
+    console.log(`Enhanced suggestions for: "${query}"`);
+    
+    const normalizedQuery = query.toLowerCase().trim();
+    const suggestions = [];
+    
+    // 1. Check exact matches first (highest priority)
+    const exactMatches = findExactMatches(normalizedQuery);
+    suggestions.push(...exactMatches);
+    
+    // 2. Check partial matches in our database
+    const partialMatches = findPartialMatches(normalizedQuery);
+    suggestions.push(...partialMatches);
+    
+    // 3. Only use Mapbox if we don't have good local matches
+    if (suggestions.length < 3) {
+      console.log('Getting additional suggestions from Mapbox...');
+      const mapboxSuggestions = await getMapboxSuggestions(query);
+      suggestions.push(...mapboxSuggestions);
+    }
+    
+    // 4. Remove duplicates and limit results
+    const uniqueSuggestions = removeDuplicateSuggestions(suggestions).slice(0, 6);
+    
+    console.log(`Returning ${uniqueSuggestions.length} enhanced suggestions`);
+    res.json({ suggestions: uniqueSuggestions });
+    
+  } catch (error) {
+    console.error('Enhanced suggestions error:', error);
+    res.json({ suggestions: [] }); // Fail gracefully
+  }
+});
+
+// Helper functions for enhanced suggestions
+function findExactMatches(query) {
+  const matches = [];
+  
+  // Check stations
+  if (LONDON_LOCATIONS_DATABASE.stations[query]) {
+    matches.push({
+      name: toTitleCase(query),
+      description: `${toTitleCase(query)} Station`,
+      type: 'station',
+      coordinates: LONDON_LOCATIONS_DATABASE.stations[query],
+      confidence: 'high',
+      source: 'database'
+    });
+  }
+  
+  // Check areas
+  if (LONDON_LOCATIONS_DATABASE.areas[query]) {
+    const area = LONDON_LOCATIONS_DATABASE.areas[query];
+    matches.push({
+      name: toTitleCase(query),
+      description: `${toTitleCase(query)} (${area.type})`,
+      type: area.type,
+      coordinates: area.coords,
+      confidence: 'high',
+      source: 'database'
+    });
+  }
+  
+  // Check aliases
+  if (LONDON_LOCATIONS_DATABASE.aliases[query]) {
+    const aliasTarget = LONDON_LOCATIONS_DATABASE.aliases[query];
+    const resolved = findExactMatches(aliasTarget);
+    matches.push(...resolved);
+  }
+  
+  return matches;
+}
+
+function findPartialMatches(query) {
+  const matches = [];
+  const words = query.split(' ').filter(word => word.length > 2);
+  
+  // Score-based matching for stations
+  for (const [stationName, coords] of Object.entries(LONDON_LOCATIONS_DATABASE.stations)) {
+    const score = calculateMatchScore(query, stationName);
+    if (score > 0.3) {
+      matches.push({
+        name: toTitleCase(stationName),
+        description: `${toTitleCase(stationName)} Station`,
+        type: 'station',
+        coordinates: coords,
+        confidence: score > 0.7 ? 'high' : 'medium',
+        source: 'database',
+        score: score
+      });
+    }
+  }
+  
+  // Score-based matching for areas
+  for (const [areaName, data] of Object.entries(LONDON_LOCATIONS_DATABASE.areas)) {
+    const score = calculateMatchScore(query, areaName);
+    if (score > 0.3) {
+      matches.push({
+        name: toTitleCase(areaName),
+        description: `${toTitleCase(areaName)} (${data.type})`,
+        type: data.type,
+        coordinates: data.coords,
+        confidence: score > 0.7 ? 'high' : 'medium',
+        source: 'database',
+        score: score
+      });
+    }
+  }
+  
+  // Sort by score and return top matches
+  return matches
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .slice(0, 4);
+}
+
+function calculateMatchScore(query, target) {
+  const normalizedQuery = query.toLowerCase();
+  const normalizedTarget = target.toLowerCase();
+  
+  // Exact match
+  if (normalizedQuery === normalizedTarget) return 1.0;
+  
+  // Target contains query
+  if (normalizedTarget.includes(normalizedQuery)) return 0.8;
+  
+  // Query contains target
+  if (normalizedQuery.includes(normalizedTarget)) return 0.7;
+  
+  // Word-based matching
+  const queryWords = normalizedQuery.split(' ');
+  const targetWords = normalizedTarget.split(' ');
+  
+  let matchingWords = 0;
+  for (const qWord of queryWords) {
+    for (const tWord of targetWords) {
+      if (qWord.length > 2 && (tWord.includes(qWord) || qWord.includes(tWord))) {
+        matchingWords++;
+        break;
+      }
+    }
+  }
+  
+  const wordScore = matchingWords / Math.max(queryWords.length, targetWords.length);
+  
+  // Fuzzy matching for common typos
+  const fuzzyScore = calculateFuzzyScore(normalizedQuery, normalizedTarget);
+  
+  return Math.max(wordScore, fuzzyScore);
+}
+
+function calculateFuzzyScore(query, target) {
+  // Simple Levenshtein-inspired fuzzy matching
+  if (Math.abs(query.length - target.length) > 3) return 0;
+  
+  let matches = 0;
+  const minLength = Math.min(query.length, target.length);
+  
+  for (let i = 0; i < minLength; i++) {
+    if (query[i] === target[i]) matches++;
+  }
+  
+  return matches / Math.max(query.length, target.length);
+}
+
+async function getMapboxSuggestions(query) {
+  try {
+    const fetch = (await import('node-fetch')).default;
+    const response = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
+      `access_token=${API_CONFIG.MAPBOX_TOKEN}&` +
+      `country=GB&` +
+      `bbox=-0.51,51.28,0.33,51.70&` + // London bounding box
+      `types=poi,place,address,neighborhood&` +
+      `limit=3`
+    );
+
+    if (!response.ok) {
+      console.warn('Mapbox suggestions failed:', response.status);
+      return [];
+    }
+
+    const data = await response.json();
+    
+    if (!data.features || data.features.length === 0) {
+      return [];
+    }
+
+    return data.features
+      .filter(feature => {
+        // Filter out irrelevant results
+        const text = (feature.text || feature.place_name || '').toLowerCase();
+        return !text.includes('real estate') && 
+               !text.includes('estate agent') &&
+               !text.includes('lettings') &&
+               !text.includes('property');
+      })
+      .map(feature => ({
+        name: feature.text || feature.place_name,
+        description: cleanMapboxDescription(feature),
+        type: determineFeatureType(feature),
+        coordinates: feature.center,
+        confidence: 'medium',
+        source: 'mapbox'
+      }));
+      
+  } catch (error) {
+    console.warn('Mapbox suggestions error:', error);
+    return [];
+  }
+}
+
+function cleanMapboxDescription(feature) {
+  const text = feature.text || '';
+  const placeName = feature.place_name || '';
+  
+  // Extract meaningful context
+  if (placeName.includes('Station')) {
+    return `${text} Station`;
+  } else if (placeName.includes('Underground')) {
+    return `${text} (Underground)`;
+  } else if (feature.place_type?.includes('poi')) {
+    return `${text} (Place)`;
+  } else if (feature.place_type?.includes('neighborhood')) {
+    return `${text} (Area)`;
+  }
+  
+  return text;
+}
+
+function determineFeatureType(feature) {
+  const text = (feature.text || feature.place_name || '').toLowerCase();
+  
+  if (text.includes('station') || text.includes('underground') || text.includes('tube')) {
+    return 'station';
+  } else if (feature.place_type?.includes('neighborhood')) {
+    return 'area';
+  } else if (feature.place_type?.includes('poi')) {
+    return 'place';
+  }
+  
+  return 'location';
+}
+
+function removeDuplicateSuggestions(suggestions) {
+  const seen = new Set();
+  return suggestions.filter(suggestion => {
+    const key = suggestion.name.toLowerCase();
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
 
 // Main search endpoint - FIXED VERSION
 app.post('/api/search/meeting-spots', async (req, res) => {
@@ -680,6 +1084,280 @@ function calculateWalkingTime(journey) {
   return journey.legs
     .filter(leg => leg.mode.name === 'walking')
     .reduce((total, leg) => total + leg.duration, 0);
+}
+
+async function getJourneyDetails(fromCoords, toCoords, meetingTime = null) {
+  console.log(`Getting journey details from [${fromCoords}] to [${toCoords}]`);
+  
+  // Try the complex version first
+  let result = await getEnhancedJourneyDetails(fromCoords, toCoords, meetingTime);
+  
+  if (!result) {
+    console.log('Enhanced journey details failed, trying simple version...');
+    result = await getJourneyDetailsSimple(fromCoords, toCoords);
+  }
+  
+  if (!result) {
+    console.log('Both journey detail methods failed, creating fallback...');
+    // Create a very basic fallback to prevent complete failure
+    const distance = getDistance(fromCoords, toCoords);
+    const estimatedTime = Math.round(distance / 1000 * 3 + 10); // Rough estimate: 3 min per km + 10 min base
+    
+    result = {
+      duration: Math.min(estimatedTime, 60), // Cap at 60 minutes
+      changes: 1,
+      route: 'Estimated route via public transport',
+      modes: ['tube', 'walking']
+    };
+  }
+  
+  console.log('Journey details result:', result);
+  return result;
+}
+
+async function fallbackGeographicAnalysis(coords1, coords2, meetingTime) {
+  console.log('🔄 Running fallback geographic analysis...');
+  console.log('Input coordinates:', { coords1, coords2 });
+  
+  // Create a broader search around the midpoint
+  const midpoint = [
+    (coords1[0] + coords2[0]) / 2,
+    (coords1[1] + coords2[1]) / 2
+  ];
+  
+  console.log('Calculated midpoint:', midpoint);
+  
+  // Find nearest predefined areas to the midpoint
+  const nearbyAreas = LONDON_MEETING_AREAS
+    .map(area => ({
+      ...area,
+      distanceFromMidpoint: getDistance(area.coordinates, midpoint)
+    }))
+    .sort((a, b) => a.distanceFromMidpoint - b.distanceFromMidpoint)
+    .slice(0, 15); // Increased from 10 to 15
+  
+  console.log('Nearby areas to analyze:', nearbyAreas.map(a => `${a.name} (${Math.round(a.distanceFromMidpoint)}m away)`));
+  
+  const analyzedAreas = [];
+  for (const area of nearbyAreas) {
+    try {
+      console.log(`Analyzing area: ${area.name}...`);
+      const journeyDetails = await analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meetingTime);
+      
+      if (journeyDetails) {
+        const maxDuration = Math.max(journeyDetails.journey1.duration, journeyDetails.journey2.duration);
+        console.log(`✅ ${area.name}: Journey 1: ${journeyDetails.journey1.duration}min, Journey 2: ${journeyDetails.journey2.duration}min`);
+        
+        // Increased time threshold from 60 to 90 minutes for fallback
+        if (maxDuration <= 90) {
+          analyzedAreas.push({
+            name: area.name,
+            coordinates: area.coordinates,
+            type: area.type,
+            zones: area.zones,
+            ...journeyDetails
+          });
+        } else {
+          console.log(`❌ ${area.name}: Too long (${maxDuration} minutes)`);
+        }
+      } else {
+        console.log(`❌ ${area.name}: No journey details returned`);
+      }
+    } catch (error) {
+      console.warn(`Failed to analyze fallback area ${area.name}:`, error.message);
+    }
+    
+    // Stop after finding a reasonable number
+    if (analyzedAreas.length >= 10) break;
+  }
+  
+  console.log(`Fallback analysis found ${analyzedAreas.length} viable areas:`, analyzedAreas.map(a => a.name));
+  
+  if (analyzedAreas.length === 0) {
+    // Last resort: create some basic results using the nearest areas with estimated journey times
+    console.log('🆘 Creating emergency fallback results...');
+    const emergencyResults = nearbyAreas.slice(0, 3).map(area => {
+      const distance1 = getDistance(coords1, area.coordinates);
+      const distance2 = getDistance(coords2, area.coordinates);
+      
+      // Very rough time estimates
+      const duration1 = Math.min(Math.round(distance1 / 1000 * 4 + 15), 75);
+      const duration2 = Math.min(Math.round(distance2 / 1000 * 4 + 15), 75);
+      
+      return {
+        name: area.name,
+        coordinates: area.coordinates,
+        type: area.type,
+        zones: area.zones || [1],
+        journey1: {
+          duration: duration1,
+          changes: 1,
+          route: 'Estimated route',
+          modes: ['tube', 'walking']
+        },
+        journey2: {
+          duration: duration2,
+          changes: 1,
+          route: 'Estimated route',
+          modes: ['tube', 'walking']
+        },
+        timeDifference: Math.abs(duration1 - duration2),
+        averageTime: (duration1 + duration2) / 2,
+        integrationData: {
+          area: area,
+          journey1: {
+            startCoords: coords1,
+            endCoords: area.coordinates,
+            startName: 'Your location',
+            endName: area.name,
+            googleMapsUrl: generateGoogleMapsUrl(coords1, area.coordinates, 'Your location', area.name),
+            citymapperUrl: generateCitymapperUrl(coords1, area.coordinates, 'Your location', area.name)
+          },
+          journey2: {
+            startCoords: coords2,
+            endCoords: area.coordinates,
+            startName: 'Their location',
+            endName: area.name,
+            googleMapsUrl: generateGoogleMapsUrl(coords2, area.coordinates, 'Their location', area.name),
+            citymapperUrl: generateCitymapperUrl(coords2, area.coordinates, 'Their location', area.name)
+          }
+        }
+      };
+    });
+    
+    console.log('Emergency fallback created:', emergencyResults.map(r => r.name));
+    return emergencyResults;
+  }
+  
+  const scoredAreas = analyzedAreas.map(area => ({
+    ...area,
+    score: calculateAreaConvenienceScore(area)
+  }));
+  
+  scoredAreas.sort((a, b) => b.score - a.score);
+  return selectDiverseAreas(scoredAreas, 3);
+}
+
+// 4. ADD debugging to the main algorithm
+async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null) {
+  console.log('🚀 Starting enhanced algorithm with precise location resolution...');
+  console.log('Input coordinates:', { coords1, coords2 });
+  
+  // Validate coordinates are actually coordinates, not location names
+  if (!Array.isArray(coords1) || !Array.isArray(coords2)) {
+    throw new Error('Algorithm requires coordinate arrays, not location names');
+  }
+  
+  if (coords1.length !== 2 || coords2.length !== 2) {
+    throw new Error('Invalid coordinate format - need [lng, lat] arrays');
+  }
+  
+  console.log('✅ Coordinates validated');
+  
+  // Continue with existing algorithm...
+  const timeIntervals = [20, 30, 45, 60];
+  let accessibleAreas = new Set();
+
+  for (const timeMinutes of timeIntervals) {
+    console.log(`🔍 Checking ${timeMinutes}-minute accessibility...`);
+    
+    try {
+      const [isochrone1, isochrone2] = await Promise.all([
+        getIsochrone(coords1, timeMinutes),
+        getIsochrone(coords2, timeMinutes)
+      ]);
+
+      console.log(`✅ Got isochrones for ${timeMinutes} minutes`);
+
+      const mutuallyAccessible = LONDON_MEETING_AREAS.filter(area => {
+        const point = area.coordinates;
+        const in1 = isPointInPolygon(point, isochrone1.geometry.coordinates[0]);
+        const in2 = isPointInPolygon(point, isochrone2.geometry.coordinates[0]);
+        return in1 && in2;
+      });
+
+      mutuallyAccessible.forEach(area => {
+        accessibleAreas.add(`${area.name}:${timeMinutes}`);
+      });
+
+      console.log(`Found ${mutuallyAccessible.length} mutually accessible areas within ${timeMinutes} minutes:`, 
+        mutuallyAccessible.map(a => a.name));
+      
+      if (accessibleAreas.size >= 15) {
+        console.log('✅ Sufficient accessible areas found, proceeding to analysis');
+        break;
+      }
+      
+    } catch (error) {
+      console.error(`❌ Error checking ${timeMinutes}-minute accessibility:`, error);
+      continue;
+    }
+  }
+
+  console.log(`📊 Total accessible area entries: ${accessibleAreas.size}`);
+
+  if (accessibleAreas.size === 0) {
+    console.log('⚠️ No mutually accessible predefined areas found, trying fallback...');
+    return await fallbackGeographicAnalysis(coords1, coords2, meetingTime);
+  }
+
+  // Extract unique areas and analyze journey details
+  const uniqueAreas = [...new Set(Array.from(accessibleAreas).map(item => item.split(':')[0]))];
+  const areaObjects = uniqueAreas.map(name => 
+    LONDON_MEETING_AREAS.find(area => area.name === name)
+  ).filter(Boolean);
+
+  console.log(`🔍 Analyzing ${areaObjects.length} unique accessible areas:`, 
+    areaObjects.map(a => a.name));
+
+  const analyzedAreas = [];
+  
+  for (const area of areaObjects) {
+    try {
+      console.log(`Analyzing ${area.name}...`);
+      const journeyDetails = await analyzeJourneyDetailsWithIntegration(coords1, coords2, area, meetingTime);
+      if (journeyDetails) {
+        analyzedAreas.push({
+          name: area.name,
+          coordinates: area.coordinates,
+          type: area.type,
+          zones: area.zones,
+          ...journeyDetails
+        });
+        console.log(`✅ ${area.name}: Average ${Math.round(journeyDetails.averageTime)}min`);
+      } else {
+        console.log(`❌ ${area.name}: No journey details`);
+      }
+    } catch (error) {
+      console.warn(`Failed to analyze area ${area.name}:`, error.message);
+      continue;
+    }
+
+    if (analyzedAreas.length >= 25) break;
+  }
+
+  console.log(`📊 Successfully analyzed ${analyzedAreas.length} areas`);
+
+  if (analyzedAreas.length === 0) {
+    console.log('⚠️ No viable meeting areas from isochrone analysis, trying fallback...');
+    return await fallbackGeographicAnalysis(coords1, coords2, meetingTime);
+  }
+
+  // Score and rank areas
+  const scoredAreas = analyzedAreas.map(area => ({
+    ...area,
+    score: calculateAreaConvenienceScore(area)
+  }));
+
+  scoredAreas.sort((a, b) => b.score - a.score);
+
+  console.log(`🏆 Scored areas:`, scoredAreas.map(a => `${a.name}: ${a.score}`));
+
+  // Apply geographic and type diversity
+  const diverseResults = selectDiverseAreas(scoredAreas, 3);
+  
+  console.log(`✅ Final diverse areas selected:`, diverseResults.map(a => a.name));
+  return diverseResults;
 }
 
 async function getJourneyDetailsSimple(fromCoords, toCoords) {
