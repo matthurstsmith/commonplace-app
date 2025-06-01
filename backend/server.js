@@ -1833,51 +1833,579 @@ function disambiguateLocationName(name, coordinates) {
 }
 
 // Initialize the location name cache if it doesn't exist
+// COMPREHENSIVE LONDON LOCATION RESOLUTION SYSTEM
+// This replaces the existing resolveLocationToCoordinates function with a bulletproof system
+
+class LondonLocationResolver {
+  constructor() {
+    // Expanded London database with comprehensive coverage
+    this.londonDatabase = this.buildComprehensiveLondonDatabase();
+    this.londonBounds = {
+      strict: { minLat: 51.28, maxLat: 51.70, minLng: -0.51, maxLng: 0.33 }, // Greater London
+      extended: { minLat: 51.20, maxLat: 51.80, minLng: -0.65, maxLng: 0.45 } // London commuter belt
+    };
+  }
+
+  buildComprehensiveLondonDatabase() {
+    return {
+      // MAJOR AREAS - covers all London boroughs and major districts
+      areas: {
+        // Central London
+        'westminster': { coords: [-0.1276, 51.4994], type: 'borough', station: 'Westminster', postcodes: ['SW1'] },
+        'city of london': { coords: [-0.0931, 51.5156], type: 'borough', station: 'Bank', postcodes: ['EC1', 'EC2', 'EC3', 'EC4'] },
+        'camden': { coords: [-0.1426, 51.5390], type: 'borough', station: 'Camden Town', postcodes: ['NW1', 'NW3'] },
+        'islington': { coords: [-0.1031, 51.5362], type: 'borough', station: 'Angel', postcodes: ['N1', 'N7'] },
+        'hackney': { coords: [-0.0553, 51.5448], type: 'borough', station: 'Hackney Central', postcodes: ['E8', 'E9'] },
+        'tower hamlets': { coords: [-0.0329, 51.5099], type: 'borough', station: 'Bethnal Green', postcodes: ['E1', 'E2', 'E3', 'E14'] },
+        'southwark': { coords: [-0.0892, 51.4837], type: 'borough', station: 'London Bridge', postcodes: ['SE1', 'SE15', 'SE16'] },
+        'lambeth': { coords: [-0.1173, 51.4612], type: 'borough', station: 'Waterloo', postcodes: ['SE11', 'SW2', 'SW4'] },
+        'wandsworth': { coords: [-0.1914, 51.4571], type: 'borough', station: 'Clapham Junction', postcodes: ['SW11', 'SW12', 'SW15', 'SW17', 'SW18'] },
+        'hammersmith and fulham': { coords: [-0.2239, 51.4916], type: 'borough', station: 'Hammersmith', postcodes: ['W6', 'W12', 'W14', 'SW6'] },
+        'kensington and chelsea': { coords: [-0.1938, 51.4988], type: 'borough', station: 'South Kensington', postcodes: ['SW3', 'SW5', 'SW7', 'SW10', 'W8'] },
+        
+        // Specific districts that users commonly reference
+        'richmond': { coords: [-0.3037, 51.4613], type: 'district', station: 'Richmond', postcodes: ['TW9', 'TW10'], borough: 'Richmond upon Thames' },
+        'richmond upon thames': { coords: [-0.3037, 51.4613], type: 'borough', station: 'Richmond', postcodes: ['TW9', 'TW10'] },
+        'kew': { coords: [-0.2876, 51.4879], type: 'district', station: 'Kew Gardens', postcodes: ['TW9'], borough: 'Richmond upon Thames' },
+        'wimbledon': { coords: [-0.2044, 51.4214], type: 'district', station: 'Wimbledon', postcodes: ['SW19'], borough: 'Merton' },
+        'greenwich': { coords: [-0.0088, 51.4825], type: 'district', station: 'Greenwich', postcodes: ['SE10'], borough: 'Greenwich' },
+        'clapham': { coords: [-0.1376, 51.4618], type: 'district', station: 'Clapham Common', postcodes: ['SW4', 'SW11'], borough: 'Lambeth' },
+        'shoreditch': { coords: [-0.0778, 51.5227], type: 'district', station: 'Old Street', postcodes: ['E1', 'E2'], borough: 'Hackney' },
+        'notting hill': { coords: [-0.2058, 51.5090], type: 'district', station: 'Notting Hill Gate', postcodes: ['W11'], borough: 'Kensington and Chelsea' },
+        'canary wharf': { coords: [-0.0235, 51.5054], type: 'business', station: 'Canary Wharf', postcodes: ['E14'], borough: 'Tower Hamlets' },
+        'borough market': { coords: [-0.0909, 51.5055], type: 'landmark', station: 'London Bridge', postcodes: ['SE1'], borough: 'Southwark' },
+        
+        // Outer London areas that users might reference
+        'croydon': { coords: [-0.0982, 51.3762], type: 'district', station: 'Croydon Central', postcodes: ['CR0'], borough: 'Croydon' },
+        'bromley': { coords: [0.0140, 51.4060], type: 'district', station: 'Bromley South', postcodes: ['BR1'], borough: 'Bromley' },
+        'kingston': { coords: [-0.3064, 51.4120], type: 'district', station: 'Kingston', postcodes: ['KT1', 'KT2'], borough: 'Kingston upon Thames' },
+        'kingston upon thames': { coords: [-0.3064, 51.4120], type: 'borough', station: 'Kingston', postcodes: ['KT1', 'KT2'] },
+        'ealing': { coords: [-0.3089, 51.5130], type: 'district', station: 'Ealing Broadway', postcodes: ['W5'], borough: 'Ealing' },
+        'harrow': { coords: [-0.3947, 51.5898], type: 'district', station: 'Harrow-on-the-Hill', postcodes: ['HA1'], borough: 'Harrow' },
+        'barnet': { coords: [-0.2089, 51.6455], type: 'district', station: 'High Barnet', postcodes: ['EN5'], borough: 'Barnet' },
+      },
+      
+      // MAJOR STATIONS - comprehensive list
+      stations: {
+        // Central London hubs
+        'bank': [-0.0886, 51.5133],
+        'liverpool street': [-0.0817, 51.5176],
+        'london bridge': [-0.0864, 51.5049],
+        'waterloo': [-0.1133, 51.5036],
+        'victoria': [-0.1448, 51.4952],
+        'paddington': [-0.1759, 51.5154],
+        'kings cross': [-0.1240, 51.5308],
+        'euston': [-0.1335, 51.5282],
+        'oxford circus': [-0.1415, 51.5154],
+        'bond street': [-0.1490, 51.5142],
+        'tottenham court road': [-0.1308, 51.5165],
+        'piccadilly circus': [-0.1347, 51.5098],
+        'leicester square': [-0.1281, 51.5115],
+        'covent garden': [-0.1243, 51.5118],
+        'westminster': [-0.1276, 51.4994],
+        'embankment': [-0.1223, 51.5074],
+        'charing cross': [-0.1263, 51.5080],
+        'baker street': [-0.1574, 51.5226],
+        
+        // Zone 2 major stations
+        'clapham junction': [-0.1706, 51.4646],
+        'richmond': [-0.3037, 51.4613], // CRITICAL: London Richmond
+        'wimbledon': [-0.2044, 51.4214],
+        'canary wharf': [-0.0235, 51.5054],
+        'stratford': [-0.0042, 51.5416],
+        'hammersmith': [-0.2239, 51.4916],
+        'earl\'s court': [-0.1940, 51.4920],
+        'south kensington': [-0.1742, 51.4941],
+        'high street kensington': [-0.1919, 51.5010],
+        'notting hill gate': [-0.1966, 51.5090],
+        'camden town': [-0.1426, 51.5390],
+        'angel': [-0.1057, 51.5322],
+        'old street': [-0.0878, 51.5259],
+        'moorgate': [-0.0886, 51.5186],
+        'barbican': [-0.0978, 51.5205],
+        'farringdon': [-0.1053, 51.5203],
+        'king\'s cross st pancras': [-0.1240, 51.5308],
+        
+        // Outer London important stations
+        'ealing broadway': [-0.3019, 51.5152],
+        'croydon central': [-0.0982, 51.3762],
+        'bromley south': [0.0173, 51.4001],
+        'kingston': [-0.3064, 51.4120],
+        'greenwich': [-0.0146, 51.4781],
+        'woolwich': [0.0635, 51.4934],
+        'harrow-on-the-hill': [-0.3766, 51.5826],
+      },
+      
+      // ALIASES AND COMMON VARIATIONS
+      aliases: {
+        // Richmond variations
+        'richmond london': 'richmond',
+        'richmond surrey': 'richmond',
+        'richmond uk': 'richmond',
+        'richmond station': 'richmond',
+        'richmond upon thames': 'richmond',
+        
+        // Other common variations
+        'king cross': 'kings cross',
+        'kings x': 'kings cross',
+        'kgx': 'kings cross',
+        'st pancras': 'kings cross',
+        'kcx': 'kings cross',
+        'tottenham court rd': 'tottenham court road',
+        'tcr': 'tottenham court road',
+        'oxford st': 'oxford circus',
+        'oxford street': 'oxford circus',
+        'bond st': 'bond street',
+        'piccadilly': 'piccadilly circus',
+        'waterloo station': 'waterloo',
+        'london bridge station': 'london bridge',
+        'clapham jct': 'clapham junction',
+        'clapham junction station': 'clapham junction',
+        'earls court': 'earl\'s court',
+        'south ken': 'south kensington',
+        'high street ken': 'high street kensington',
+        'canary wharf station': 'canary wharf',
+        'borough': 'borough market',
+        'the borough': 'borough market',
+        'borough market area': 'borough market',
+        
+        // Area variations
+        'the city': 'city of london',
+        'square mile': 'city of london',
+        'financial district': 'city of london',
+        'west end': 'oxford circus',
+        'central london': 'oxford circus',
+        'south london': 'waterloo',
+        'north london': 'camden',
+        'east london': 'stratford',
+        'west london': 'hammersmith',
+      },
+      
+      // POSTCODE MAPPINGS
+      postcodes: {
+        'SW1': 'westminster',
+        'SW3': 'kensington and chelsea', 
+        'SW5': 'kensington and chelsea',
+        'SW7': 'kensington and chelsea',
+        'SW10': 'kensington and chelsea',
+        'W8': 'kensington and chelsea',
+        'W6': 'hammersmith and fulham',
+        'W12': 'hammersmith and fulham',
+        'W14': 'hammersmith and fulham',
+        'SW6': 'hammersmith and fulham',
+        'TW9': 'richmond',
+        'TW10': 'richmond',
+        'SW19': 'wimbledon',
+        'SE10': 'greenwich',
+        'E14': 'canary wharf',
+        'SW4': 'clapham',
+        'SW11': 'clapham',
+        'N1': 'islington',
+        'E1': 'shoreditch',
+        'E2': 'shoreditch',
+        'W11': 'notting hill',
+        'SE1': 'borough market',
+        'W5': 'ealing',
+        'CR0': 'croydon',
+        'BR1': 'bromley',
+        'KT1': 'kingston',
+        'KT2': 'kingston',
+        'HA1': 'harrow',
+        'EN5': 'barnet'
+      }
+    };
+  }
+
+  // MAIN RESOLUTION FUNCTION - replaces resolveLocationToCoordinates
+  async resolveLocation(locationInput) {
+    console.log(`\n🔍 RESOLVING LOCATION: "${locationInput}"`);
+    
+    const normalizedInput = this.normalizeInput(locationInput);
+    
+    // STAGE 1: Direct database lookup (highest confidence)
+    const directMatch = this.findDirectMatch(normalizedInput);
+    if (directMatch) {
+      console.log(`✅ DIRECT MATCH: ${directMatch.name} [${directMatch.confidence}]`);
+      return directMatch;
+    }
+    
+    // STAGE 2: Postcode pattern matching
+    const postcodeMatch = this.findPostcodeMatch(normalizedInput);
+    if (postcodeMatch) {
+      console.log(`✅ POSTCODE MATCH: ${postcodeMatch.name} [${postcodeMatch.confidence}]`);
+      return postcodeMatch;
+    }
+    
+    // STAGE 3: Fuzzy matching within London database
+    const fuzzyMatch = this.findFuzzyMatch(normalizedInput);
+    if (fuzzyMatch) {
+      console.log(`✅ FUZZY MATCH: ${fuzzyMatch.name} [${fuzzyMatch.confidence}]`);
+      return fuzzyMatch;
+    }
+    
+    // STAGE 4: London-constrained geocoding
+    const geocodedMatch = await this.findGeocodedMatch(normalizedInput);
+    if (geocodedMatch) {
+      console.log(`✅ GEOCODED MATCH: ${geocodedMatch.name} [${geocodedMatch.confidence}]`);
+      return geocodedMatch;
+    }
+    
+    // STAGE 5: Disambiguation or failure
+    console.log(`❌ NO VALID LONDON LOCATION FOUND for "${locationInput}"`);
+    throw new Error(`Could not find "${locationInput}" in London. Please try being more specific (e.g., "Richmond London" or include a postcode).`);
+  }
+
+  normalizeInput(input) {
+    return input.toLowerCase()
+      .trim()
+      .replace(/[^\w\s'-]/g, '') // Remove special chars except apostrophes and hyphens
+      .replace(/\s+/g, ' '); // Normalize whitespace
+  }
+
+  findDirectMatch(normalizedInput) {
+    const db = this.londonDatabase;
+    
+    // Check stations first (highest priority)
+    if (db.stations[normalizedInput]) {
+      return {
+        coordinates: db.stations[normalizedInput],
+        name: this.toTitleCase(normalizedInput),
+        type: 'station',
+        confidence: 'very_high',
+        source: 'direct_station_match'
+      };
+    }
+    
+    // Check areas
+    if (db.areas[normalizedInput]) {
+      const area = db.areas[normalizedInput];
+      return {
+        coordinates: area.coords,
+        name: this.toTitleCase(normalizedInput),
+        type: area.type,
+        confidence: 'very_high',
+        source: 'direct_area_match',
+        nearestStation: area.station
+      };
+    }
+    
+    // Check aliases
+    if (db.aliases[normalizedInput]) {
+      const aliasTarget = db.aliases[normalizedInput];
+      console.log(`🔄 ALIAS REDIRECT: "${normalizedInput}" → "${aliasTarget}"`);
+      return this.findDirectMatch(aliasTarget);
+    }
+    
+    return null;
+  }
+
+  findPostcodeMatch(normalizedInput) {
+    const db = this.londonDatabase;
+    
+    // Extract potential postcode patterns
+    const postcodePattern = /\b([A-Z]{1,2}\d{1,2}[A-Z]?)\b/gi;
+    const matches = normalizedInput.match(postcodePattern);
+    
+    if (matches) {
+      for (const postcode of matches) {
+        const postcodeUpper = postcode.toUpperCase();
+        const shortPostcode = postcodeUpper.replace(/\d[A-Z]{2}$/, ''); // Remove last part (e.g., SW1A → SW1)
+        
+        if (db.postcodes[postcodeUpper] || db.postcodes[shortPostcode]) {
+          const targetArea = db.postcodes[postcodeUpper] || db.postcodes[shortPostcode];
+          console.log(`📮 POSTCODE REDIRECT: "${postcodeUpper}" → "${targetArea}"`);
+          return this.findDirectMatch(targetArea);
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  findFuzzyMatch(normalizedInput) {
+    const db = this.londonDatabase;
+    const words = normalizedInput.split(' ');
+    
+    // Try partial matching for multi-word locations
+    const allLocations = [
+      ...Object.keys(db.stations),
+      ...Object.keys(db.areas),
+      ...Object.keys(db.aliases)
+    ];
+    
+    // Look for locations that contain all the input words
+    for (const location of allLocations) {
+      const locationWords = location.split(' ');
+      
+      // Check if all input words are contained in location name
+      const allWordsMatch = words.every(word => 
+        word.length > 2 && locationWords.some(locWord => 
+          locWord.includes(word) || word.includes(locWord)
+        )
+      );
+      
+      if (allWordsMatch && words.length >= 2) {
+        console.log(`🎯 FUZZY MATCH: "${normalizedInput}" → "${location}"`);
+        return this.findDirectMatch(location);
+      }
+    }
+    
+    // Try single word matching for distinctive words
+    for (const word of words) {
+      if (word.length > 4) { // Only try longer words
+        for (const location of allLocations) {
+          if (location.includes(word) && this.isDistinctiveMatch(word, location)) {
+            console.log(`🎯 PARTIAL MATCH: "${word}" → "${location}"`);
+            return this.findDirectMatch(location);
+          }
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  isDistinctiveMatch(word, location) {
+    // Avoid matching very common words that could cause false positives
+    const commonWords = ['street', 'road', 'lane', 'avenue', 'square', 'park', 'hill', 'green', 'common', 'the', 'and', 'of'];
+    return !commonWords.includes(word) && word.length > 4;
+  }
+
+  async findGeocodedMatch(normalizedInput) {
+    if (!API_CONFIG.MAPBOX_TOKEN) {
+      console.log('⚠️ No Mapbox token available for geocoding');
+      return null;
+    }
+    
+    try {
+      console.log(`🌍 GEOCODING: "${normalizedInput}" with London constraints`);
+      
+      const fetch = (await import('node-fetch')).default;
+      
+      // ENHANCED: Multiple geocoding strategies
+      const strategies = [
+        // Strategy 1: London-constrained search
+        this.buildMapboxUrl(normalizedInput, 'london_constrained'),
+        // Strategy 2: UK search with London proximity
+        this.buildMapboxUrl(normalizedInput, 'uk_london_proximity'),
+        // Strategy 3: London area search
+        this.buildMapboxUrl(`${normalizedInput} London`, 'london_area')
+      ];
+      
+      for (const [strategyName, url] of strategies) {
+        console.log(`🔍 Trying ${strategyName}...`);
+        
+        const response = await fetch(url);
+        if (!response.ok) continue;
+        
+        const data = await response.json();
+        const londonResult = this.findBestLondonResult(data.features, normalizedInput);
+        
+        if (londonResult) {
+          console.log(`✅ GEOCODING SUCCESS with ${strategyName}`);
+          return londonResult;
+        }
+      }
+      
+      console.log('❌ No valid London results from geocoding');
+      return null;
+      
+    } catch (error) {
+      console.error('🚨 Geocoding failed:', error.message);
+      return null;
+    }
+  }
+
+  buildMapboxUrl(query, strategy) {
+    const baseUrl = 'https://api.mapbox.com/geocoding/v5/mapbox.places/';
+    const token = API_CONFIG.MAPBOX_TOKEN;
+    
+    const strategies = {
+      london_constrained: [
+        `${baseUrl}${encodeURIComponent(query)}.json?`,
+        `access_token=${token}&`,
+        `country=GB&`,
+        `bbox=-0.51,51.28,0.33,51.70&`, // London bounding box
+        `proximity=-0.1278,51.5074&`, // Central London
+        `types=place,postcode,address,poi,neighborhood&`,
+        `limit=10`
+      ].join(''),
+      
+      uk_london_proximity: [
+        `${baseUrl}${encodeURIComponent(query)}.json?`,
+        `access_token=${token}&`,
+        `country=GB&`,
+        `proximity=-0.1278,51.5074&`, // Central London proximity
+        `types=place,postcode,address,poi,neighborhood&`,
+        `limit=10`
+      ].join(''),
+      
+      london_area: [
+        `${baseUrl}${encodeURIComponent(query)}.json?`,
+        `access_token=${token}&`,
+        `country=GB&`,
+        `proximity=-0.1278,51.5074&`,
+        `types=place,neighborhood,poi&`,
+        `limit=5`
+      ].join('')
+    };
+    
+    return [strategy, strategies[strategy]];
+  }
+
+  findBestLondonResult(features, originalInput) {
+    if (!features || features.length === 0) return null;
+    
+    // Score and filter results
+    const scoredResults = features
+      .map(feature => this.scoreGeocodingResult(feature, originalInput))
+      .filter(result => result.isLondon)
+      .sort((a, b) => b.score - a.score);
+    
+    if (scoredResults.length === 0) return null;
+    
+    const best = scoredResults[0];
+    console.log(`🏆 Best geocoding result: ${best.feature.place_name} (score: ${best.score})`);
+    
+    return {
+      coordinates: best.feature.center,
+      name: this.cleanLocationName(best.feature.text || best.feature.place_name),
+      type: 'geocoded',
+      confidence: best.score > 80 ? 'high' : (best.score > 60 ? 'medium' : 'low'),
+      source: 'mapbox_geocoding',
+      fullData: best.feature
+    };
+  }
+
+  scoreGeocodingResult(feature, originalInput) {
+    let score = 0;
+    let isLondon = false;
+    
+    const [lng, lat] = feature.center;
+    const name = (feature.place_name || '').toLowerCase();
+    const text = (feature.text || '').toLowerCase();
+    const context = feature.context || [];
+    
+    // CRITICAL: London boundary check
+    if (this.isInLondonBounds(feature.center)) {
+      isLondon = true;
+      score += 50; // Base London bonus
+    }
+    
+    // Context analysis for London indicators
+    const londonIndicators = ['london', 'greater london', 'england', 'united kingdom'];
+    for (const ctx of context) {
+      const ctxText = (ctx.text || '').toLowerCase();
+      if (londonIndicators.some(indicator => ctxText.includes(indicator))) {
+        isLondon = true;
+        score += 20;
+      }
+    }
+    
+    // Name matching score
+    const inputWords = originalInput.split(' ');
+    const nameWords = text.split(' ');
+    
+    for (const inputWord of inputWords) {
+      if (inputWord.length > 2) {
+        for (const nameWord of nameWords) {
+          if (nameWord.includes(inputWord) || inputWord.includes(nameWord)) {
+            score += 15;
+          }
+        }
+      }
+    }
+    
+    // Relevance score from Mapbox
+    score += (feature.relevance || 0) * 20;
+    
+    // Type preferences
+    const types = feature.place_type || [];
+    if (types.includes('place')) score += 10;
+    if (types.includes('neighborhood')) score += 8;
+    if (types.includes('poi')) score += 6;
+    
+    // Penalize obviously wrong locations
+    if (name.includes('brentwood') || name.includes('essex') || name.includes('hertfordshire')) {
+      score = 0;
+      isLondon = false;
+    }
+    
+    console.log(`📊 Scored "${feature.place_name}": ${score} (London: ${isLondon})`);
+    
+    return { feature, score, isLondon };
+  }
+
+  isInLondonBounds(coordinates) {
+    const [lng, lat] = coordinates;
+    const bounds = this.londonBounds.strict;
+    
+    return lat >= bounds.minLat && 
+           lat <= bounds.maxLat &&
+           lng >= bounds.minLng && 
+           lng <= bounds.maxLng;
+  }
+
+  cleanLocationName(name) {
+    if (!name) return 'Unknown Location';
+    
+    return name
+      .replace(/,.*$/, '') // Remove everything after first comma
+      .replace(/\b(Station|Underground|Tube|Rail)\b/gi, '') // Remove transport type words
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim();
+  }
+
+  toTitleCase(str) {
+    return str.replace(/\w\S*/g, (txt) => 
+      txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
+    );
+  }
+}
+
+// INTEGRATION: Replace the existing resolveLocationToCoordinates function
+const londonResolver = new LondonLocationResolver();
+
 async function resolveLocationToCoordinates(locationInput) {
-  console.log(`Resolving location: "${locationInput}"`);
-  
-  const normalizedInput = locationInput.toLowerCase().trim();
-  
-  // 1. Check direct station matches
-  if (LONDON_LOCATIONS_DATABASE.stations[normalizedInput]) {
-    const coords = LONDON_LOCATIONS_DATABASE.stations[normalizedInput];
-    console.log(`✅ Found station: ${locationInput} -> ${coords}`);
-    return {
-      coordinates: coords,
-      name: toTitleCase(normalizedInput),
-      type: 'station',
-      confidence: 'high'
-    };
+  try {
+    return await londonResolver.resolveLocation(locationInput);
+  } catch (error) {
+    console.error(`Location resolution failed for "${locationInput}":`, error.message);
+    throw error;
   }
+}
+
+// TESTING: Add this function to validate the resolver
+async function testLocationResolution() {
+  const testCases = [
+    'Richmond', // Should resolve to London Richmond, not Brentwood
+    'Richmond London',
+    'Richmond upon Thames',
+    'Kensington',
+    'Borough Market',
+    'Borough',
+    'Bank',
+    'Kings Cross',
+    'TW9', // Richmond postcode
+    'SW1', // Westminster postcode
+    'Canary Wharf',
+    'E14', // Canary Wharf postcode
+    'Wimbledon',
+    'Angel',
+    'Shoreditch',
+    'Invalid Location XYZ' // Should fail gracefully
+  ];
   
-  // 2. Check area matches
-  if (LONDON_LOCATIONS_DATABASE.areas[normalizedInput]) {
-    const area = LONDON_LOCATIONS_DATABASE.areas[normalizedInput];
-    console.log(`✅ Found area: ${locationInput} -> ${area.coords}`);
-    return {
-      coordinates: area.coords,
-      name: toTitleCase(normalizedInput),
-      type: area.type,
-      confidence: 'high'
-    };
+  console.log('\n🧪 TESTING LOCATION RESOLUTION...\n');
+  
+  for (const testCase of testCases) {
+    try {
+      const result = await resolveLocationToCoordinates(testCase);
+      console.log(`✅ "${testCase}" → ${result.name} [${result.coordinates}] (${result.confidence})`);
+    } catch (error) {
+      console.log(`❌ "${testCase}" → ERROR: ${error.message}`);
+    }
   }
-  
-  // 3. Check aliases
-  if (LONDON_LOCATIONS_DATABASE.aliases[normalizedInput]) {
-    const aliasTarget = LONDON_LOCATIONS_DATABASE.aliases[normalizedInput];
-    return await resolveLocationToCoordinates(aliasTarget);
-  }
-  
-  // 4. Partial matching for common variations
-  const partialMatch = findPartialMatch(normalizedInput);
-  if (partialMatch) {
-    console.log(`✅ Found partial match: ${locationInput} -> ${partialMatch}`);
-    return await resolveLocationToCoordinates(partialMatch);
-  }
-  
-  // 5. Fallback to Mapbox with London-focused parameters
-  console.log(`🔍 Using Mapbox geocoding for: ${locationInput}`);
-  return await geocodeWithMapbox(locationInput);
 }
 
 function findKnownLondonLocation(coordinates) {
