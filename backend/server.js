@@ -730,23 +730,63 @@ async function geocodeLocation(locationName) {
 }
 
 // Algorithm implementation
-// REPLACE the existing findOptimalMeetingSpots function with this:
+// PERFORMANCE-OPTIMIZED MEETING SPOT ALGORITHM
+// This replaces the existing findOptimalMeetingSpots function
+
 async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null, originalLocation1 = null, originalLocation2 = null) {
-  console.log('Starting enhanced algorithm with precise location resolution...');
+  console.log('Starting PERFORMANCE-OPTIMIZED algorithm...');
+  const startTime = Date.now();
   
-  // Validate coordinates are actually coordinates, not location names
+  // Validate coordinates
   if (!Array.isArray(coords1) || !Array.isArray(coords2)) {
     throw new Error('Algorithm requires coordinate arrays, not location names');
   }
   
   console.log('Using coordinates:', { coords1, coords2 });
   
-  // Continue with existing algorithm...
+  // PHASE 1: SMART ISOCHRONE COLLECTION WITH EARLY TERMINATION
+  const collectedAreas = await collectAreasWithEarlyTermination(coords1, coords2);
+  
+  if (collectedAreas.length === 0) {
+    console.log('No mutually accessible areas found, trying fallback...');
+    return await fallbackGeographicAnalysis(coords1, coords2, meetingTime, originalLocation1, originalLocation2);
+  }
+  
+  console.log(`✅ Collected ${collectedAreas.length} candidate areas for analysis`);
+  
+  // PHASE 2: FAST PRE-FILTERING
+  const preFilteredAreas = await preFilterAreas(collectedAreas, coords1, coords2);
+  console.log(`✅ Pre-filtered to ${preFilteredAreas.length} high-potential areas`);
+  
+  // PHASE 3: PARALLEL JOURNEY ANALYSIS
+  const analyzedAreas = await parallelJourneyAnalysis(preFilteredAreas, coords1, coords2, meetingTime, originalLocation1, originalLocation2);
+  
+  if (analyzedAreas.length === 0) {
+    throw new Error('No viable meeting areas found after analysis');
+  }
+  
+  // PHASE 4: SCORING AND SELECTION
+  const scoredAreas = analyzedAreas.map(area => ({
+    ...area,
+    score: calculateAreaConvenienceScore(area)
+  }));
+  
+  scoredAreas.sort((a, b) => b.score - a.score);
+  const diverseResults = selectDiverseAreas(scoredAreas, 3);
+  
+  const totalTime = Date.now() - startTime;
+  console.log(`🚀 Algorithm completed in ${totalTime}ms with ${diverseResults.length} results`);
+  
+  return diverseResults;
+}
+
+// PHASE 1: SMART EARLY TERMINATION ISOCHRONE COLLECTION
+async function collectAreasWithEarlyTermination(coords1, coords2) {
   const timeIntervals = [20, 30, 45, 60];
   let accessibleAreas = new Set();
-
+  
   for (const timeMinutes of timeIntervals) {
-    console.log(`Checking ${timeMinutes}-minute accessibility...`);
+    console.log(`🔍 Checking ${timeMinutes}-minute accessibility...`);
     
     try {
       const [isochrone1, isochrone2] = await Promise.all([
@@ -764,79 +804,189 @@ async function findOptimalMeetingSpots(coords1, coords2, meetingTime = null, ori
         accessibleAreas.add(`${area.name}:${timeMinutes}`);
       });
 
-      console.log(`Found ${mutuallyAccessible.length} mutually accessible areas within ${timeMinutes} minutes`);
+      console.log(`📍 Found ${mutuallyAccessible.length} new areas (${accessibleAreas.size} total)`);
       
-      if (accessibleAreas.size >= 15) break;
+      // SMART EARLY TERMINATION LOGIC
+      if (timeMinutes === 20 && accessibleAreas.size >= 6) {
+        console.log(`🚀 EARLY TERMINATION: Found ${accessibleAreas.size} areas in 20 minutes - sufficient for analysis`);
+        break;
+      }
+      
+      if (timeMinutes === 30 && accessibleAreas.size >= 8) {
+        console.log(`🚀 EARLY TERMINATION: Found ${accessibleAreas.size} areas in 30 minutes - sufficient for analysis`);
+        break;
+      }
+      
+      if (timeMinutes === 45 && accessibleAreas.size >= 12) {
+        console.log(`🚀 EARLY TERMINATION: Found ${accessibleAreas.size} areas in 45 minutes - more than sufficient`);
+        break;
+      }
+      
+      // If we have very few results, continue to next time interval
+      if (accessibleAreas.size < 3) {
+        console.log(`⏭️ Only ${accessibleAreas.size} areas found, continuing to next time interval...`);
+        continue;
+      }
       
     } catch (error) {
-      console.error(`Error checking ${timeMinutes}-minute accessibility:`, error);
+      console.error(`❌ Error checking ${timeMinutes}-minute accessibility:`, error);
       continue;
     }
   }
-
-  if (accessibleAreas.size === 0) {
-    console.log('No mutually accessible predefined areas found, trying fallback...');
-    return await fallbackGeographicAnalysis(coords1, coords2, meetingTime);
-  }
-
-  // Extract unique areas and analyze journey details
+  
+  // Extract unique areas
   const uniqueAreas = [...new Set(Array.from(accessibleAreas).map(item => item.split(':')[0]))];
-  const areaObjects = uniqueAreas.map(name => 
+  return uniqueAreas.map(name => 
     LONDON_MEETING_AREAS.find(area => area.name === name)
   ).filter(Boolean);
+}
 
-  console.log(`Analyzing ${areaObjects.length} unique accessible areas:`, 
-    areaObjects.map(a => a.name));
+// PHASE 2: FAST PRE-FILTERING USING DISTANCE ESTIMATION
+async function preFilterAreas(areas, coords1, coords2) {
+  console.log(`🎯 Pre-filtering ${areas.length} areas using distance estimation...`);
+  
+  const scoredAreas = areas.map(area => {
+    const distance1 = getDistance(coords1, area.coordinates);
+    const distance2 = getDistance(coords2, area.coordinates);
+    
+    // Fast estimation: 2km = ~15min by public transport in London
+    const estimatedTime1 = Math.min(8 + (distance1 / 1000) * 7, 60);
+    const estimatedTime2 = Math.min(8 + (distance2 / 1000) * 7, 60);
+    const avgTime = (estimatedTime1 + estimatedTime2) / 2;
+    const timeDiff = Math.abs(estimatedTime1 - estimatedTime2);
+    
+    // Quick scoring for pre-filtering
+    let quickScore = 100 - avgTime; // Prefer shorter average times
+    quickScore -= timeDiff * 0.5;   // Small fairness penalty
+    
+    // Zone bonus (central areas are generally better connected)
+    if (area.zones && area.zones.includes(1)) quickScore += 10;
+    if (area.type === 'major_station') quickScore += 8;
+    
+    return {
+      area,
+      quickScore,
+      estimatedAvgTime: avgTime,
+      estimatedTimeDiff: timeDiff
+    };
+  });
+  
+  // Sort by quick score and take top candidates
+  scoredAreas.sort((a, b) => b.quickScore - a.quickScore);
+  
+  // Take top 8-12 areas, but ensure we have some variety
+  const maxAreas = Math.min(Math.max(8, Math.floor(areas.length * 0.6)), 12);
+  const selectedAreas = scoredAreas.slice(0, maxAreas).map(item => item.area);
+  
+  console.log(`✅ Pre-filtering selected ${selectedAreas.length} areas:`, 
+    selectedAreas.map(a => a.name).join(', '));
+  
+  return selectedAreas;
+}
 
+// PHASE 3: PARALLEL JOURNEY ANALYSIS
+async function parallelJourneyAnalysis(areas, coords1, coords2, meetingTime, originalLocation1, originalLocation2) {
+  console.log(`🚀 Starting PARALLEL analysis of ${areas.length} areas...`);
+  const startTime = Date.now();
+  
+  // Process areas in parallel batches to avoid overwhelming the TfL API
+  const BATCH_SIZE = 3; // Analyze 3 areas simultaneously
+  const batches = chunkArray(areas, BATCH_SIZE);
   const analyzedAreas = [];
   
-  for (const area of areaObjects) {
-    try {
-      const journeyDetails = await analyzeJourneyDetailsWithIntegration(
-  coords1, 
-  coords2, 
-  area, 
-  meetingTime,
-  originalLocation1,
-  originalLocation2
-);
-      if (journeyDetails) {
-        analyzedAreas.push({
-          name: area.name,
-          coordinates: area.coordinates,
-          type: area.type,
-          zones: area.zones,
-          ...journeyDetails
-        });
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i];
+    console.log(`📦 Processing batch ${i + 1}/${batches.length} (${batch.map(a => a.name).join(', ')})...`);
+    
+    // Analyze areas in this batch in parallel
+    const batchPromises = batch.map(async (area) => {
+      try {
+        const journeyDetails = await analyzeJourneyDetailsWithIntegration(
+          coords1, 
+          coords2, 
+          area, 
+          meetingTime,
+          originalLocation1,
+          originalLocation2
+        );
+        
+        if (journeyDetails && journeyDetails.journey1.duration <= 60 && journeyDetails.journey2.duration <= 60) {
+          return {
+            name: area.name,
+            coordinates: area.coordinates,
+            type: area.type,
+            zones: area.zones,
+            ...journeyDetails
+          };
+        }
+        return null;
+      } catch (error) {
+        console.warn(`⚠️ Failed to analyze ${area.name}:`, error.message);
+        return null;
       }
-    } catch (error) {
-      console.warn(`Failed to analyze area ${area.name}:`, error.message);
-      continue;
+    });
+    
+    // Wait for all areas in this batch to complete
+    const batchResults = await Promise.all(batchPromises);
+    const validResults = batchResults.filter(result => result !== null);
+    
+    analyzedAreas.push(...validResults);
+    console.log(`✅ Batch ${i + 1} completed: ${validResults.length}/${batch.length} areas analyzed successfully`);
+    
+    // Small delay between batches to be respectful to TfL API
+    if (i < batches.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 200)); // 200ms delay
     }
-
-    if (analyzedAreas.length >= 25) break;
   }
-
-  if (analyzedAreas.length === 0) {
-    throw new Error('No viable meeting areas found with journey data');
-  }
-
-  // Score and rank areas
-  const scoredAreas = analyzedAreas.map(area => ({
-    ...area,
-    score: calculateAreaConvenienceScore(area)
-  }));
-
-  scoredAreas.sort((a, b) => b.score - a.score);
-
-  console.log(`Scored areas:`, scoredAreas.map(a => `${a.name}: ${a.score}`));
-
-  // Apply geographic and type diversity
-  const diverseResults = selectDiverseAreas(scoredAreas, 3);
   
-  console.log(`Final diverse areas selected:`, diverseResults.map(a => a.name));
-  return diverseResults;
+  const analysisTime = Date.now() - startTime;
+  console.log(`🎯 Parallel analysis completed in ${analysisTime}ms: ${analyzedAreas.length} viable areas found`);
+  
+  return analyzedAreas;
 }
+
+// UTILITY: Chunk array into batches
+function chunkArray(array, chunkSize) {
+  const chunks = [];
+  for (let i = 0; i < array.length; i += chunkSize) {
+    chunks.push(array.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+// ENHANCED FALLBACK WITH PERFORMANCE OPTIMIZATION
+async function fallbackGeographicAnalysis(coords1, coords2, meetingTime, originalLocation1 = null, originalLocation2 = null) {
+  console.log('🔄 Running OPTIMIZED fallback geographic analysis...');
+  
+  const midpoint = [
+    (coords1[0] + coords2[0]) / 2,
+    (coords1[1] + coords2[1]) / 2
+  ];
+  
+  // Get nearest areas to midpoint, but limit to reasonable number
+  const nearbyAreas = LONDON_MEETING_AREAS
+    .map(area => ({
+      ...area,
+      distanceFromMidpoint: getDistance(area.coordinates, midpoint)
+    }))
+    .sort((a, b) => a.distanceFromMidpoint - b.distanceFromMidpoint)
+    .slice(0, 8); // Only analyze top 8 nearest areas
+  
+  console.log('🎯 Analyzing nearest areas to midpoint:', nearbyAreas.map(a => a.name));
+  
+  // Use parallel analysis for fallback too
+  return await parallelJourneyAnalysis(nearbyAreas, coords1, coords2, meetingTime, originalLocation1, originalLocation2);
+}
+
+// PERFORMANCE MONITORING: Add timing logs to key functions
+const originalAnalyzeJourneyDetails = analyzeJourneyDetailsWithIntegration;
+analyzeJourneyDetailsWithIntegration = async function(...args) {
+  const start = Date.now();
+  const result = await originalAnalyzeJourneyDetails.apply(this, args);
+  const duration = Date.now() - start;
+  console.log(`⏱️ Journey analysis for ${args[2]?.name || 'unknown'}: ${duration}ms`);
+  return result;
+};
 
 async function getIsochrone(coordinates, timeMinutes) {
   console.log(`Getting ${timeMinutes}-minute isochrone for:`, coordinates);
