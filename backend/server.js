@@ -1506,6 +1506,55 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+// TESTING FUNCTION - Add this to test location resolution
+async function testLocationResolution() {
+  const testCases = [
+    'Richmond',           // Should resolve to London Richmond, not Brentwood
+    'Richmond London',    // Should resolve to London Richmond with high confidence
+    'TW9',               // Richmond postcode
+    'Borough Market',     // Should resolve correctly
+    'Borough',           // Should resolve to Borough Market, not Bank
+    'Bank',              // Should resolve to Bank station
+    'Kensington',        // Should resolve to London Kensington
+    'Kings Cross',       // Should resolve with alias
+    'Angel',             // Should resolve to Angel area/station
+    'Canary Wharf',      // Should resolve correctly
+    'E14',               // Canary Wharf postcode
+    'SW1',               // Westminster postcode
+    'Wimbledon',         // Should resolve correctly
+    'Invalid Location XYZ' // Should fail gracefully
+  ];
+  
+  console.log('\n🧪 TESTING LOCATION RESOLUTION...\n');
+  
+  for (const testCase of testCases) {
+    try {
+      const result = await resolveLocationToCoordinates(testCase);
+      console.log(`✅ "${testCase}" → ${result.name} [${result.coordinates}] (${result.confidence}) - ${result.source}`);
+    } catch (error) {
+      console.log(`❌ "${testCase}" → ERROR: ${error.message}`);
+    }
+  }
+  
+  console.log('\n🧪 TESTING COMPLETE\n');
+}
+
+// Add a simple endpoint to trigger the test
+app.get('/api/test-locations', async (req, res) => {
+  try {
+    await testLocationResolution();
+    res.json({ 
+      success: true, 
+      message: 'Location resolution test completed. Check server logs for results.' 
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Commonplace API server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
