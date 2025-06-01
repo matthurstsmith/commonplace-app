@@ -515,29 +515,6 @@
             position: relative;
         }
 
-        .connection-status {
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-            color: #1d4ed8;
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 20px;
-            text-align: center;
-            font-size: 0.9rem;
-        }
-
-        .connection-status.connected {
-            background: rgba(34, 197, 94, 0.1);
-            border-color: rgba(34, 197, 94, 0.3);
-            color: #166534;
-        }
-
-        .connection-status.error {
-            background: rgba(239, 68, 68, 0.1);
-            border-color: rgba(239, 68, 68, 0.3);
-            color: #dc2626;
-        }
-
         /* Mobile responsiveness */
         @media (max-width: 768px) {
             .journey-details {
@@ -605,7 +582,7 @@
                     <div class="input-group">
                         <label for="location1">Your location</label>
                         <div class="input-container">
-                            <input type="text" id="location1" class="location-input" placeholder="Enter your starting location (e.g., London Bridge)">
+                            <input type="text" id="location1" class="location-input" placeholder="Enter your starting location (e.g., Acton, London Bridge)">
                             <div class="suggestions" id="suggestions1"></div>
                         </div>
                     </div>
@@ -613,7 +590,7 @@
                     <div class="input-group">
                         <label for="location2">Their location</label>
                         <div class="input-container">
-                            <input type="text" id="location2" class="location-input" placeholder="Enter their starting location (e.g., South Kensington)">
+                            <input type="text" id="location2" class="location-input" placeholder="Enter their starting location (e.g., Borough Market, Camden)">
                             <div class="suggestions" id="suggestions2"></div>
                         </div>
                     </div>
@@ -632,10 +609,6 @@
 
                     <button class="find-button" id="findLocations">Find meeting spots</button>
                     
-                    <div class="connection-status" id="connectionStatus">
-                        🔄 Testing API connection...
-                    </div>
-                    
                     <div id="errorContainer"></div>
                 </div>
             </div>
@@ -648,7 +621,7 @@
                 <h2>Finding your perfect meeting spots...</h2>
                 <p>Analyzing transport routes and optimizing convenience</p>
                 <div class="loading-steps">
-                    <div class="loading-step active" id="step1">📍 Analyzing locations</div>
+                    <div class="loading-step active" id="step1">📍 Resolving locations</div>
                     <div class="loading-step" id="step2">🗺️ Mapping accessible areas</div>
                     <div class="loading-step" id="step3">🚇 Planning transport routes</div>
                     <div class="loading-step" id="step4">⭐ Ranking by convenience</div>
@@ -675,142 +648,14 @@
         // Application state
         let selectedVenueTypes = [];
 
-        // Initialize the app
-      document.addEventListener('DOMContentLoaded', function() {
-    console.log('Commonplace app initialized');
-    
-    // Initialize core functionality immediately
-    initializeEventListeners();
-    setupLocationAutocomplete();
-    
-    // Initialize smart API monitoring in background
-    apiHealth.initialize();
-});
-
-
-class APIHealthManager {
-    constructor() {
-        this.isHealthy = null; // null = unknown, true = healthy, false = unhealthy
-        this.lastCheck = null;
-        this.checkInterval = null;
-        this.isDevelopment = window.location.hostname === 'localhost' || window.location.hostname.includes('vercel');
-    }
-
-    async initialize() {
-        // Only show status in development or if there are known issues
-        const statusEl = document.getElementById('connectionStatus');
-        
-        if (!this.isDevelopment) {
-            // In production, hide the status by default
-            statusEl.style.display = 'none';
-        }
-
-        // Start smart background monitoring
-        this.startSmartMonitoring();
-    }
-
-    async startSmartMonitoring() {
-        // Do one quick check immediately (with short timeout)
-        await this.quickHealthCheck();
-        
-        // Set up periodic monitoring every 30 seconds
-        this.checkInterval = setInterval(() => {
-            this.quickHealthCheck();
-        }, 30000);
-    }
-
-    async quickHealthCheck() {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000); // Very fast timeout
+        // Initialize the app immediately
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Commonplace app initialized');
             
-            const startTime = Date.now();
-            const response = await fetch(`${API_BASE_URL}/health`, {
-                signal: controller.signal
-            });
-            
-            clearTimeout(timeoutId);
-            const responseTime = Date.now() - startTime;
-            
-            if (response.ok) {
-                const data = await response.json();
-                this.handleHealthyAPI(responseTime);
-            } else {
-                this.handleUnhealthyAPI(`HTTP ${response.status}`);
-            }
-            
-        } catch (error) {
-            if (error.name !== 'AbortError') {
-                this.handleUnhealthyAPI(error.message);
-            }
-        }
-        
-        this.lastCheck = Date.now();
-    }
-
-    handleHealthyAPI(responseTime) {
-        const wasUnhealthy = this.isHealthy === false;
-        this.isHealthy = true;
-        
-        if (this.isDevelopment) {
-            console.log(`✅ API healthy (${responseTime}ms)`);
-        }
-        
-        // If it was unhealthy and now it's healthy, briefly show success
-        if (wasUnhealthy) {
-            this.showTemporaryStatus('✅ Connection restored!', 'connected', 3000);
-        }
-    }
-
-    handleUnhealthyAPI(reason) {
-        const wasHealthy = this.isHealthy === true;
-        this.isHealthy = false;
-        
-        console.warn('⚠️ API unhealthy:', reason);
-        
-        // Show warning only if API was previously healthy or in development
-        if (wasHealthy || this.isDevelopment) {
-            this.showTemporaryStatus(
-                '⚠️ Connection issue detected - But you can still try searching!', 
-                'error', 
-                8000
-            );
-        }
-    }
-
-    showTemporaryStatus(message, className, duration) {
-        const statusEl = document.getElementById('connectionStatus');
-        statusEl.textContent = message;
-        statusEl.className = `connection-status ${className}`;
-        statusEl.style.display = 'block';
-        
-        setTimeout(() => {
-            statusEl.style.display = 'none';
-        }, duration);
-    }
-
-    // Call this when user tries to search - provides just-in-time feedback
-    async validateBeforeSearch() {
-        // If we haven't checked recently or know it's unhealthy, do a quick check
-        const timeSinceLastCheck = Date.now() - (this.lastCheck || 0);
-        
-        if (timeSinceLastCheck > 60000 || this.isHealthy === false) {
-            await this.quickHealthCheck();
-        }
-        
-        // Return whether we think the API is ready
-        return this.isHealthy !== false; // true or null (unknown) both allow search
-    }
-
-    cleanup() {
-        if (this.checkInterval) {
-            clearInterval(this.checkInterval);
-        }
-    }
-}
-
-// Initialize the smart API manager
-const apiHealth = new APIHealthManager();
+            // Initialize core functionality immediately - NO API BLOCKING
+            initializeEventListeners();
+            setupLocationAutocomplete();
+        });
 
         function initializeEventListeners() {
             // Venue type selection
@@ -865,156 +710,131 @@ const apiHealth = new APIHealthManager();
         }
 
         function setupAutocompleteForInput(input, suggestionsDiv) {
-    let timeout;
-    
-    input.addEventListener('input', async function() {
-        clearTimeout(timeout);
-        const query = this.value.trim();
-        
-        if (query.length < 2) {
-            suggestionsDiv.classList.remove('active');
-            return;
-        }
-
-        timeout = setTimeout(async () => {
-            try {
-                console.log('Getting enhanced suggestions for:', query);
+            let timeout;
+            
+            input.addEventListener('input', async function() {
+                clearTimeout(timeout);
+                const query = this.value.trim();
                 
-                // Get suggestions from enhanced backend
-                const response = await fetch(`${API_BASE_URL}/locations/enhanced-suggestions?q=${encodeURIComponent(query)}`);
-                
-                if (!response.ok) {
-                    console.warn('Enhanced suggestions failed, using fallback');
-                    const fallbackSuggestions = generateLocalSuggestions(query);
-                    displaySuggestions(fallbackSuggestions, suggestionsDiv, input);
+                if (query.length < 2) {
+                    suggestionsDiv.classList.remove('active');
                     return;
                 }
-                
-                const data = await response.json();
-                console.log('Enhanced suggestions response:', data);
-                
-                const suggestions = data.suggestions || [];
-                displaySuggestions(suggestions, suggestionsDiv, input);
-                
-            } catch (error) {
-                console.error('Suggestions error:', error);
-                
-                // Fallback to local suggestions
-                const fallbackSuggestions = generateLocalSuggestions(query);
-                displaySuggestions(fallbackSuggestions, suggestionsDiv, input);
-            }
-        }, 300);
-    });
 
-    // Hide suggestions when clicking outside
-    document.addEventListener('click', function(e) {
-        if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
-            suggestionsDiv.classList.remove('active');
+                timeout = setTimeout(async () => {
+                    try {
+                        console.log('Getting enhanced suggestions for:', query);
+                        
+                        // Try enhanced suggestions first
+                        const response = await fetch(`${API_BASE_URL}/locations/enhanced-suggestions?q=${encodeURIComponent(query)}`);
+                        
+                        if (!response.ok) {
+                            console.warn('Enhanced suggestions failed, using fallback');
+                            const fallbackSuggestions = generateLocalSuggestions(query);
+                            displaySuggestions(fallbackSuggestions, suggestionsDiv, input);
+                            return;
+                        }
+                        
+                        const data = await response.json();
+                        console.log('Enhanced suggestions response:', data);
+                        
+                        const suggestions = data.suggestions || [];
+                        displaySuggestions(suggestions, suggestionsDiv, input);
+                        
+                    } catch (error) {
+                        console.error('Suggestions error:', error);
+                        
+                        // Fallback to local suggestions
+                        const fallbackSuggestions = generateLocalSuggestions(query);
+                        displaySuggestions(fallbackSuggestions, suggestionsDiv, input);
+                    }
+                }, 300);
+            });
+
+            // Hide suggestions when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+                    suggestionsDiv.classList.remove('active');
+                }
+            });
         }
-    });
-}
 
-// ADD this function to generate local suggestions as fallback
-function generateLocalSuggestions(query) {
-    const normalizedQuery = query.toLowerCase();
-    
-    // Common London locations for fallback
-    const commonLocations = [
-        { name: 'Acton', type: 'area' },
-        { name: 'Angel', type: 'station' },
-        { name: 'Bank', type: 'station' },
-        { name: 'Bond Street', type: 'station' },
-        { name: 'Borough Market', type: 'market' },
-        { name: 'Camden', type: 'area' },
-        { name: 'Canary Wharf', type: 'business' },
-        { name: 'Clapham', type: 'area' },
-        { name: 'Covent Garden', type: 'area' },
-        { name: 'Greenwich', type: 'area' },
-        { name: 'Hammersmith', type: 'area' },
-        { name: 'Islington', type: 'area' },
-        { name: 'King\\'s Cross', type: 'station' },
-        { name: 'Liverpool Street', type: 'station' },
-        { name: 'London Bridge', type: 'station' },
-        { name: 'Notting Hill', type: 'area' },
-        { name: 'Oxford Circus', type: 'station' },
-        { name: 'Paddington', type: 'station' },
-        { name: 'Shoreditch', type: 'area' },
-        { name: 'Tottenham Court Road', type: 'station' },
-        { name: 'Victoria', type: 'station' },
-        { name: 'Waterloo', type: 'station' },
-        { name: 'Westminster', type: 'station' }
-    ];
-    
-    // Filter and score matches
-    const matches = commonLocations
-        .filter(location => {
-            const name = location.name.toLowerCase();
-            return name.includes(normalizedQuery) || 
-                   normalizedQuery.split(' ').some(word => 
-                       word.length > 2 && name.includes(word)
-                   );
-        })
-        .map(location => ({
-            name: location.name,
-            description: `${location.name} (${location.type})`,
-            coordinates: [0, 0], // Will be resolved on backend
-            source: 'local'
-        }))
-        .slice(0, 5);
-    
-    return matches;
-}
-        function filterLondonResults(suggestions) {
-            return suggestions.filter(suggestion => {
-                const name = suggestion.name.toLowerCase();
-                const coords = suggestion.coordinates;
-                
-                const londonBounds = {
-                    minLat: 51.28, maxLat: 51.70,
-                    minLng: -0.51, maxLng: 0.33
-                };
-                
-                const inBounds = coords[1] >= londonBounds.minLat && 
-                                coords[1] <= londonBounds.maxLat &&
-                                coords[0] >= londonBounds.minLng && 
-                                coords[0] <= londonBounds.maxLng;
-                
-                const hasLondonContext = name.includes('london') || 
-                                        name.includes('uk') ||
-                                        name.match(/\b(sw|se|nw|ne|n|s|e|w)\d+\b/) ||
-                                        name.includes('station') ||
-                                        name.includes('street') ||
-                                        name.includes('road');
-                
-                return inBounds || hasLondonContext;
-            }).slice(0, 5);
+        // Local suggestions as fallback
+        function generateLocalSuggestions(query) {
+            const normalizedQuery = query.toLowerCase();
+            
+            // Common London locations for fallback
+            const commonLocations = [
+                { name: 'Acton', type: 'area' },
+                { name: 'Angel', type: 'station' },
+                { name: 'Bank', type: 'station' },
+                { name: 'Bond Street', type: 'station' },
+                { name: 'Borough Market', type: 'market' },
+                { name: 'Camden', type: 'area' },
+                { name: 'Canary Wharf', type: 'business' },
+                { name: 'Clapham', type: 'area' },
+                { name: 'Covent Garden', type: 'area' },
+                { name: 'Greenwich', type: 'area' },
+                { name: 'Hammersmith', type: 'area' },
+                { name: 'Islington', type: 'area' },
+                { name: "King's Cross", type: 'station' },
+                { name: 'Liverpool Street', type: 'station' },
+                { name: 'London Bridge', type: 'station' },
+                { name: 'Notting Hill', type: 'area' },
+                { name: 'Oxford Circus', type: 'station' },
+                { name: 'Paddington', type: 'station' },
+                { name: 'Shoreditch', type: 'area' },
+                { name: 'Tottenham Court Road', type: 'station' },
+                { name: 'Victoria', type: 'station' },
+                { name: 'Waterloo', type: 'station' },
+                { name: 'Westminster', type: 'station' }
+            ];
+            
+            // Filter and score matches
+            const matches = commonLocations
+                .filter(location => {
+                    const name = location.name.toLowerCase();
+                    return name.includes(normalizedQuery) || 
+                           normalizedQuery.split(' ').some(word => 
+                               word.length > 2 && name.includes(word)
+                           );
+                })
+                .map(location => ({
+                    name: location.name,
+                    description: `${location.name} (${location.type})`,
+                    coordinates: [0, 0], // Will be resolved on backend
+                    source: 'local'
+                }))
+                .slice(0, 5);
+            
+            return matches;
         }
 
         function displaySuggestions(suggestions, suggestionsDiv, input) {
-    if (suggestions.length === 0) {
-        suggestionsDiv.classList.remove('active');
-        return;
-    }
-
-    suggestionsDiv.innerHTML = suggestions.map(suggestion => {
-        const displayName = suggestion.description || suggestion.name;
-        const subtitle = suggestion.type ? ` (${suggestion.type})` : '';
-        
-        return `<div class="suggestion-item" data-name="${suggestion.name}" data-coords="${(suggestion.coordinates || []).join(',')}">${displayName}${subtitle}</div>`;
-    }).join('');
-
-    suggestionsDiv.classList.add('active');
-
-    suggestionsDiv.querySelectorAll('.suggestion-item').forEach(item => {
-        item.addEventListener('click', function() {
-            input.value = this.dataset.name;
-            if (this.dataset.coords && this.dataset.coords !== ',') {
-                input.dataset.coordinates = this.dataset.coords;
+            if (suggestions.length === 0) {
+                suggestionsDiv.classList.remove('active');
+                return;
             }
-            suggestionsDiv.classList.remove('active');
-        });
-    });
-}
+
+            suggestionsDiv.innerHTML = suggestions.map(suggestion => {
+                const displayName = suggestion.description || suggestion.name;
+                const subtitle = suggestion.type ? ` (${suggestion.type})` : '';
+                
+                return `<div class="suggestion-item" data-name="${suggestion.name}" data-coords="${(suggestion.coordinates || []).join(',')}">${displayName}${subtitle}</div>`;
+            }).join('');
+
+            suggestionsDiv.classList.add('active');
+
+            suggestionsDiv.querySelectorAll('.suggestion-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    input.value = this.dataset.name;
+                    if (this.dataset.coords && this.dataset.coords !== ',') {
+                        input.dataset.coordinates = this.dataset.coords;
+                    }
+                    suggestionsDiv.classList.remove('active');
+                });
+            });
+        }
 
         async function handleFindLocations() {
             const location1 = document.getElementById('location1');
@@ -1026,44 +846,38 @@ function generateLocalSuggestions(query) {
             }
 
             try {
-    // Quick API validation before starting search
-    const apiReady = await apiHealth.validateBeforeSearch();
-    if (!apiReady) {
-        console.warn('API might be unhealthy, but attempting search anyway...');
-    }
+                showLoadingScreen();
+                hideError();
 
-    showLoadingScreen();
-    hideError();
+                console.log('Searching for meeting spots between:', location1.value, 'and', location2.value);
+                
+                const response = await fetch(`${API_BASE_URL}/search/meeting-spots`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        location1: location1.value,
+                        location2: location2.value,
+                        venueTypes: selectedVenueTypes
+                    })
+                });
 
-    console.log('Searching for meeting spots between:', location1.value, 'and', location2.value);
-    
-    const response = await fetch(`${API_BASE_URL}/search/meeting-spots`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            location1: location1.value,
-            location2: location2.value,
-            venueTypes: selectedVenueTypes
-        })
-    });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
 
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-    }
+                const data = await response.json();
+                console.log('Search results:', data);
 
-    const data = await response.json();
-    console.log('Search results:', data);
-
-    if (data.success && data.results) {
-        hideLoadingScreen();
-        showResultsPage();
-        displayResults(data.results);
-    } else {
-        throw new Error('No results returned from API');
-    }
+                if (data.success && data.results) {
+                    hideLoadingScreen();
+                    showResultsPage();
+                    displayResults(data.results);
+                } else {
+                    throw new Error('No results returned from API');
+                }
 
             } catch (error) {
                 console.error('Search error:', error);
@@ -1331,10 +1145,6 @@ function generateLocalSuggestions(query) {
 
         console.log('Commonplace frontend loaded successfully');
         console.log('API URL configured:', API_BASE_URL);
-        // Clean up when page unloads
-window.addEventListener('beforeunload', () => {
-    apiHealth.cleanup();
-});
     </script>
 </body>
 </html>
